@@ -1,4 +1,4 @@
-name: Timeweb SSH reachability
+name: Timeweb HTTPS reachability
 
 on:
   push:
@@ -13,12 +13,11 @@ permissions:
   contents: read
 
 jobs:
-  test-ssh:
+  test-https:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Check Timeweb SSH port
+      - name: Check Stroydnepr HTTPS
         shell: bash
         run: |
-          timeout 15 bash -c 'cat < /dev/null > /dev/tcp/vh374.timeweb.ru/22'
-          echo "Timeweb SSH port 22 is reachable from GitHub Actions."
+          curl --fail --silent --show-error --head             --connect-timeout 15 --max-time 25             https://stroydnepr.ru/
