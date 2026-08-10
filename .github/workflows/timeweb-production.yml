@@ -1,18 +1,100 @@
-name: Validate production source
+name: Deploy production to Timeweb
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: stroydnepr-production
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
-  validate:
+  validate-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TIMEWEB_HOST: vh374.timeweb.ru
+      TIMEWEB_PORT: "22"
+      TIMEWEB_USER: cg07170
+      TIMEWEB_HOME: /home/c/cg07170
+      TIMEWEB_PUBLIC_DIR: /home/c/cg07170/public_html
+      TIMEWEB_RELEASE_DIR: /home/c/cg07170/.stroydnepr-release
+      SSHPASS: ${{ secrets.TIMEWEB_SSH_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
       - name: Validate website
         run: python3 scripts/check_site.py
+
+      - name: Check deployment secret
+        shell: bash
+        run: |
+          if [ -z "${SSHPASS}" ]; then
+            echo "::error::Add repository secret TIMEWEB_SSH_PASSWORD with the main Timeweb account password."
+            exit 1
+          fi
+
+      - name: Install SSH password helper
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends sshpass
+
+      - name: Trust Timeweb host key
+        shell: bash
+        run: |
+          mkdir -p "${HOME}/.ssh"
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 20 -p "${TIMEWEB_PORT}" "${TIMEWEB_HOST}" >> "${HOME}/.ssh/known_hosts" 2>/dev/null; then
+              break
+            fi
+            [ "${attempt}" -lt 3 ] && sleep 5
+          done
+          test -s "${HOME}/.ssh/known_hosts"
+          chmod 600 "${HOME}/.ssh/known_hosts"
+
+      - name: Upload verified release
+        shell: bash
+        run: |
+          SSH_TARGET="${TIMEWEB_USER}@${TIMEWEB_HOST}"
+          SSH_OPTIONS="-p ${TIMEWEB_PORT} -o BatchMode=no -o StrictHostKeyChecking=yes -o ConnectTimeout=25"
+
+          sshpass -e ssh ${SSH_OPTIONS} "${SSH_TARGET}" \
+            "rm -rf '${TIMEWEB_RELEASE_DIR}' && mkdir -p '${TIMEWEB_RELEASE_DIR}'"
+
+          sshpass -e rsync -az --delete \
+            -e "ssh ${SSH_OPTIONS}" \
+            site/ "${SSH_TARGET}:${TIMEWEB_RELEASE_DIR}/"
+
+      - name: Backup and publish atomically
+        shell: bash
+        run: |
+          SSH_TARGET="${TIMEWEB_USER}@${TIMEWEB_HOST}"
+          SSH_OPTIONS="-p ${TIMEWEB_PORT} -o BatchMode=no -o StrictHostKeyChecking=yes -o ConnectTimeout=25"
+
+          sshpass -e ssh ${SSH_OPTIONS} "${SSH_TARGET}" "
+            set -eu
+            mkdir -p '${TIMEWEB_PUBLIC_DIR}'
+            rm -f '${TIMEWEB_HOME}/stroydnepr-auto-previous.tar.gz.tmp'
+            tar -czf '${TIMEWEB_HOME}/stroydnepr-auto-previous.tar.gz.tmp' -C '${TIMEWEB_PUBLIC_DIR}' .
+            mv '${TIMEWEB_HOME}/stroydnepr-auto-previous.tar.gz.tmp' '${TIMEWEB_HOME}/stroydnepr-auto-previous.tar.gz'
+            rsync -a --delete --exclude='.well-known/' '${TIMEWEB_RELEASE_DIR}/' '${TIMEWEB_PUBLIC_DIR}/'
+            printf '%s\n' '${GITHUB_SHA}' > '${TIMEWEB_PUBLIC_DIR}/.deploy-version'
+            touch '${TIMEWEB_PUBLIC_DIR}/.dimasites-managed'
+            test -f '${TIMEWEB_PUBLIC_DIR}/assets/images/service-pipeline.webp'
+            grep -q 'services-grid--visual' '${TIMEWEB_PUBLIC_DIR}/index.html'
+            rm -rf '${TIMEWEB_RELEASE_DIR}'
+          "
+
+      - name: Verify public website
+        shell: bash
+        run: |
+          curl --fail --location --retry 5 --retry-all-errors \
+            --connect-timeout 15 --max-time 30 \
+            "https://stroydnepr.ru/?deploy=${GITHUB_SHA}" > /dev/null
+          echo "### Timeweb deployment complete" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Commit: \`${GITHUB_SHA}\`" >> "${GITHUB_STEP_SUMMARY}"
