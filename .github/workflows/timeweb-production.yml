@@ -1,4 +1,4 @@
-name: Timeweb production
+name: Validate production source
 
 on:
   push:
@@ -8,29 +8,11 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: timeweb-production
-  cancel-in-progress: false
-
 jobs:
-  validate-and-deploy:
+  validate:
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://stroydnepr.ru/
     steps:
       - name: Checkout
         uses: actions/checkout@v6
       - name: Validate website
         run: python3 scripts/check_site.py
-      - name: Deploy accepted version to Timeweb
-        uses: SamKirkland/FTP-Deploy-Action@v4.4.0
-        with:
-          server: ${{ secrets.TIMEWEB_FTP_SERVER }}
-          username: ${{ secrets.TIMEWEB_FTP_USERNAME }}
-          password: ${{ secrets.TIMEWEB_FTP_PASSWORD }}
-          protocol: ftps
-          port: 21
-          local-dir: ./site/
-          server-dir: ${{ secrets.TIMEWEB_DIR }}
-          log-level: standard
