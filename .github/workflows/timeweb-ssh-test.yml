@@ -1,0 +1,21 @@
+name: Timeweb SSH reachability
+
+on:
+  push:
+    branches:
+      - agent/timeweb-ssh-test
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-ssh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check Timeweb SSH port
+        shell: bash
+        run: |
+          timeout 15 bash -c 'cat < /dev/null > /dev/tcp/vh374.timeweb.ru/22'
+          echo "Timeweb SSH port 22 is reachable from GitHub Actions."
