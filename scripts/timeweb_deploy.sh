@@ -23,8 +23,27 @@ if [ ! -d "${DEPLOY_REPOSITORY}/.git" ]; then
     exit 1
 fi
 
-git -C "${DEPLOY_REPOSITORY}" fetch --depth 1 origin main
-git -C "${DEPLOY_REPOSITORY}" reset --hard FETCH_HEAD
+FETCH_OK=0
+FETCH_ATTEMPT=1
+while [ "${FETCH_ATTEMPT}" -le 3 ]; do
+    echo "GitHub update attempt ${FETCH_ATTEMPT}/3..."
+    if timeout 75 git -C "${DEPLOY_REPOSITORY}" fetch --depth 1 origin main; then
+        FETCH_OK=1
+        break
+    fi
+    FETCH_ATTEMPT=$((FETCH_ATTEMPT + 1))
+    [ "${FETCH_ATTEMPT}" -le 3 ] && sleep 10
+done
+
+if [ "${FETCH_OK}" -eq 1 ]; then
+    git -C "${DEPLOY_REPOSITORY}" reset --hard FETCH_HEAD
+elif [ -f "${MANAGED_MARKER}" ]; then
+    echo "GitHub is temporarily unavailable. The current live version is unchanged."
+    exit 0
+else
+    echo "GitHub is temporarily unavailable. Using the successfully cloned version for the first deployment."
+fi
+
 python3 "${DEPLOY_REPOSITORY}/scripts/check_site.py"
 
 mkdir -p "${PUBLIC_DIRECTORY}"
