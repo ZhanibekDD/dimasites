@@ -47,6 +47,29 @@
     revealItems.forEach((item) => item.classList.add('is-visible'));
   }
 
+  const precisionPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
+  const motionAllowed = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (precisionPointer.matches && motionAllowed) {
+    document.querySelectorAll('[data-service-card]').forEach((card) => {
+      card.addEventListener('pointermove', (event) => {
+        const bounds = card.getBoundingClientRect();
+        const x = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
+        const y = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
+        card.style.setProperty('--spot-x', `${(x * 100).toFixed(1)}%`);
+        card.style.setProperty('--spot-y', `${(y * 100).toFixed(1)}%`);
+        card.style.setProperty('--tilt-x', `${((0.5 - y) * 4).toFixed(2)}deg`);
+        card.style.setProperty('--tilt-y', `${((x - 0.5) * 5).toFixed(2)}deg`);
+      });
+
+      card.addEventListener('pointerleave', () => {
+        card.style.setProperty('--spot-x', '50%');
+        card.style.setProperty('--spot-y', '38%');
+        card.style.setProperty('--tilt-x', '0deg');
+        card.style.setProperty('--tilt-y', '0deg');
+      });
+    });
+  }
+
   document.querySelectorAll('[data-contact-form]').forEach((form) => {
     const status = form.querySelector('.form-status');
     form.addEventListener('submit', async (event) => {
