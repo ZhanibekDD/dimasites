@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Знак группы компаний ДНЕПР</title>
+  <defs>
+    <linearGradient id="yellow" x1="8" y1="5" x2="53" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFE465"/>
+      <stop offset="0.46" stop-color="#FFD429"/>
+      <stop offset="1" stop-color="#F2BD08"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="8" y1="51" x2="57" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5E737E"/>
+      <stop offset="1" stop-color="#3D4E57"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#yellow)" d="M4 4h56v43H49L32 30 15 47H4V4Z"/>
+  <path fill="#0B1117" d="M4 45h10l18-18 18 18h10v11H48L32 40 16 56H4V45Z"/>
+  <path fill="url(#steel)" d="M4 55h13l15-15 15 15h13v5H45L32 47 19 60H4v-5Z"/>
+  <path fill="none" stroke="#7F939D" stroke-opacity=".68" stroke-width="1.25" d="m18 56 14-14 14 14"/>
+  <path fill="#FFF4B8" fill-opacity=".7" d="M7 7h50v1.25H7z"/>
+</svg>

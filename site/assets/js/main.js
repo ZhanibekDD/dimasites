@@ -11,6 +11,15 @@
   updateHeader();
   window.addEventListener('scroll', updateHeader, { passive: true });
 
+  const updateScrollProgress = () => {
+    const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = scrollable > 0 ? Math.min(1, Math.max(0, window.scrollY / scrollable)) : 0;
+    document.body.style.setProperty('--scroll-progress', progress.toFixed(4));
+  };
+
+  updateScrollProgress();
+  window.addEventListener('scroll', updateScrollProgress, { passive: true });
+
   if (menuButton && nav) {
     menuButton.addEventListener('click', () => {
       const open = !nav.classList.contains('open');
@@ -50,6 +59,21 @@
   const precisionPointer = window.matchMedia('(hover: hover) and (pointer: fine)');
   const motionAllowed = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (precisionPointer.matches && motionAllowed) {
+    const hero = document.querySelector('.hero');
+    if (hero) {
+      hero.addEventListener('pointermove', (event) => {
+        const x = (event.clientX / window.innerWidth - 0.5) * -12;
+        const y = (event.clientY / window.innerHeight - 0.5) * -8;
+        hero.style.setProperty('--hero-shift-x', `${x.toFixed(2)}px`);
+        hero.style.setProperty('--hero-shift-y', `${y.toFixed(2)}px`);
+      });
+
+      hero.addEventListener('pointerleave', () => {
+        hero.style.setProperty('--hero-shift-x', '0px');
+        hero.style.setProperty('--hero-shift-y', '0px');
+      });
+    }
+
     document.querySelectorAll('[data-service-card]').forEach((card) => {
       card.addEventListener('pointermove', (event) => {
         const bounds = card.getBoundingClientRect();
