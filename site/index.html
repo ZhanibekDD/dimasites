@@ -15,7 +15,7 @@
   <meta property="og:url" content="https://stroydnepr.ru/">
   <meta property="og:image" content="https://stroydnepr.ru/assets/images/hero-yard.webp">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="stylesheet" href="/assets/css/main.css?v=20260811-wow3">
+  <link rel="stylesheet" href="/assets/css/main.css?v=20260811-wow4">
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -76,12 +76,92 @@
           <div class="hero-fact"><strong>50+ ед.</strong><span>собственной спецтехники</span></div>
         </div>
       </div>
+      <div class="hero-telemetry" aria-hidden="true">
+        <span class="telemetry-status"><i></i> Производственный контур</span>
+        <strong>63°47′ N</strong>
+        <span>Муравленко · ЯНАО</span>
+        <div class="telemetry-scale"><b></b></div>
+        <small>ПРОЕКТ → СТРОИТЕЛЬСТВО → СДАЧА</small>
+      </div>
     </section>
 
     <section class="trust-strip" aria-label="Опыт сотрудничества">
       <div class="container trust-inner">
         <span class="trust-label">Опыт работы с компаниями</span>
         <div class="trust-names"><span>РОСНЕФТЬ</span><span>ГАЗПРОМ НЕФТЬ</span><span>ГАЗПРОМНЕФТЬ-МУРАВЛЕНКО</span><span>РН-ПУРНЕФТЕГАЗ</span></div>
+      </div>
+    </section>
+
+    <section class="audit-section" id="audit" aria-labelledby="audit-title">
+      <div class="container audit-shell">
+        <div class="audit-intro" data-reveal>
+          <p class="eyebrow light">Инженерный экспресс-аудит</p>
+          <h2 id="audit-title">Проверьте готовность проекта за 60 секунд</h2>
+          <p>Ответьте на четыре вопроса. Система покажет индекс готовности, узкие места и какие исходные данные лучше подготовить до разговора с подрядчиком.</p>
+          <div class="audit-benefits"><span>Без регистрации</span><span>Результат сразу</span><span>Подходит для тендера</span></div>
+        </div>
+        <form class="audit-panel" action="/contact.php" method="post" data-project-audit data-contact-form data-reveal>
+          <div class="audit-panel-head"><span>PROJECT READINESS / 01</span><div class="audit-progress" aria-hidden="true"><b></b></div><strong data-audit-counter>1 из 4</strong></div>
+
+          <fieldset class="audit-step" data-audit-step="1">
+            <legend>Что необходимо реализовать?</legend>
+            <div class="audit-options">
+              <label class="audit-option"><input type="radio" name="audit_type" value="Трубопровод" data-score="25" required><span><b>01</b><strong>Трубопровод</strong><small>Новое строительство или реконструкция</small></span></label>
+              <label class="audit-option"><input type="radio" name="audit_type" value="Промышленный объект" data-score="22"><span><b>02</b><strong>Промышленный объект</strong><small>Площадка, здание или инфраструктура</small></span></label>
+              <label class="audit-option"><input type="radio" name="audit_type" value="Проектирование" data-score="18"><span><b>03</b><strong>Проектирование</strong><small>Изыскания, ПСД и экспертиза</small></span></label>
+              <label class="audit-option"><input type="radio" name="audit_type" value="Капитальный ремонт" data-score="25"><span><b>04</b><strong>Капитальный ремонт</strong><small>Действующий объект или сеть</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="audit-step" data-audit-step="2" hidden>
+            <legend>На какой стадии проект?</legend>
+            <div class="audit-options audit-options--compact">
+              <label class="audit-option"><input type="radio" name="audit_stage" value="Есть только задача" data-score="5" required><span><b>01</b><strong>Есть только задача</strong></span></label>
+              <label class="audit-option"><input type="radio" name="audit_stage" value="Собираем исходные данные" data-score="12"><span><b>02</b><strong>Собираем исходные данные</strong></span></label>
+              <label class="audit-option"><input type="radio" name="audit_stage" value="Есть проектная документация" data-score="20"><span><b>03</b><strong>Есть проектная документация</strong></span></label>
+              <label class="audit-option"><input type="radio" name="audit_stage" value="Готов к тендеру или старту" data-score="28"><span><b>04</b><strong>Готов к тендеру или старту</strong></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="audit-step" data-audit-step="3" hidden>
+            <legend>Какие материалы уже есть?</legend>
+            <p class="audit-hint">Можно выбрать несколько вариантов.</p>
+            <div class="audit-checks">
+              <label><input type="checkbox" name="audit_docs[]" value="Техническое задание" data-score="8"><span>Техническое задание</span></label>
+              <label><input type="checkbox" name="audit_docs[]" value="Ведомость объёмов" data-score="8"><span>Ведомость объёмов</span></label>
+              <label><input type="checkbox" name="audit_docs[]" value="Чертежи или ПСД" data-score="8"><span>Чертежи или ПСД</span></label>
+              <label><input type="checkbox" name="audit_docs[]" value="График и требования" data-score="8"><span>График и требования</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="audit-step" data-audit-step="4" hidden>
+            <legend>Когда планируется старт?</legend>
+            <div class="audit-options audit-options--compact">
+              <label class="audit-option"><input type="radio" name="audit_timing" value="Срочно, до месяца" data-score="5" required><span><b>01</b><strong>Срочно, до месяца</strong></span></label>
+              <label class="audit-option"><input type="radio" name="audit_timing" value="В течение 3 месяцев" data-score="12"><span><b>02</b><strong>В течение 3 месяцев</strong></span></label>
+              <label class="audit-option"><input type="radio" name="audit_timing" value="В течение 6 месяцев" data-score="18"><span><b>03</b><strong>В течение 6 месяцев</strong></span></label>
+              <label class="audit-option"><input type="radio" name="audit_timing" value="Формируем план" data-score="22"><span><b>04</b><strong>Формируем план</strong></span></label>
+            </div>
+          </fieldset>
+
+          <div class="audit-result" data-audit-result hidden>
+            <div class="audit-score"><span>Индекс готовности</span><strong><b data-audit-score>0</b>%</strong><div><i data-audit-gauge></i></div></div>
+            <h3 data-audit-title>Проект требует сборки исходных данных</h3>
+            <p data-audit-advice>Подготовим перечень недостающих материалов и предложим следующий шаг.</p>
+            <div class="audit-lead-fields">
+              <div class="field"><label for="audit-name">Имя *</label><input id="audit-name" name="name" autocomplete="name" required maxlength="80"></div>
+              <div class="field"><label for="audit-phone">Телефон *</label><input id="audit-phone" name="phone" type="tel" autocomplete="tel" required maxlength="30"></div>
+              <div class="field field-full"><label for="audit-company">Компания</label><input id="audit-company" name="company" autocomplete="organization" maxlength="120"></div>
+            </div>
+            <input type="hidden" name="email" value=""><input type="hidden" name="message" data-audit-message value="Инженерный экспресс-аудит"><input type="hidden" name="source" value="Инженерный экспресс-аудит">
+            <div class="honeypot" aria-hidden="true"><label for="audit-website">Сайт</label><input id="audit-website" name="website" tabindex="-1" autocomplete="off"></div>
+            <label class="consent consent--dark"><input name="consent" type="checkbox" value="1" required><span>Согласен на обработку данных согласно <a href="/privacy/" target="_blank" rel="noopener">политике</a>.</span></label>
+            <button class="button button-primary form-submit" type="submit">Получить разбор проекта <span class="arrow">↗</span></button>
+            <p class="form-status" role="status" aria-live="polite"></p>
+          </div>
+
+          <div class="audit-controls" data-audit-controls><button type="button" class="audit-back" data-audit-back disabled>Назад</button><button type="button" class="button button-primary" data-audit-next>Продолжить <span class="arrow">→</span></button></div>
+        </form>
       </div>
     </section>
 
@@ -107,15 +187,15 @@
             <span class="service-number">03 / 06</span><span class="arrow" aria-hidden="true">↗</span>
             <div class="service-content"><span class="service-kicker">Единая ответственность</span><h3>Генеральный подряд</h3><p>Управление сроками, подрядчиками, качеством и документацией на всём объекте.</p><span class="service-more">Открыть направление <b>→</b></span></div>
           </a>
-          <a class="service-card service-card--visual" data-service-card href="/services/">
+          <a class="service-card service-card--visual" data-service-card href="/services/promyshlennoe-stroitelstvo-yanao.html">
             <span class="service-media"><img src="/assets/images/service-commissioning.webp" alt="" width="1280" height="853" loading="lazy" decoding="async"></span>
             <span class="service-number">04 / 06</span><span class="arrow" aria-hidden="true">↗</span>
             <div class="service-content"><span class="service-kicker">Готовность систем</span><h3>Пусконаладочные работы</h3><p>Подготовка систем и оборудования к безопасному вводу в эксплуатацию.</p><span class="service-more">Смотреть все услуги <b>→</b></span></div>
           </a>
-          <a class="service-card service-card--visual" data-service-card href="/services/">
+          <a class="service-card service-card--visual" data-service-card href="/services/promyshlennoe-stroitelstvo-yanao.html">
             <span class="service-media"><img src="/assets/images/service-special.webp" alt="" width="1280" height="853" loading="lazy" decoding="async"></span>
             <span class="service-number">05 / 06</span><span class="arrow" aria-hidden="true">↗</span>
-            <div class="service-content"><span class="service-kicker">Сложные задачи</span><h3>Специальные строительные работы</h3><p>СМР, ремонт, отделка, благоустройство и технический надзор.</p><span class="service-more">Смотреть все услуги <b>→</b></span></div>
+            <div class="service-content"><span class="service-kicker">Сложные задачи</span><h3>Промышленное строительство</h3><p>СМР, ремонт, инженерная инфраструктура, благоустройство и технический надзор.</p><span class="service-more">Открыть направление <b>→</b></span></div>
           </a>
           <a class="service-card service-card--visual" data-service-card href="/services/">
             <span class="service-media"><img src="/assets/images/service-geodesy.webp" alt="" width="1280" height="853" loading="lazy" decoding="async"></span>
@@ -213,6 +293,6 @@
       <div class="footer-bottom"><span>© 1992–2026 ООО «ДНЕПР»</span><a href="/privacy/">Политика конфиденциальности</a></div>
     </div>
   </footer>
-  <script src="/assets/js/main.js?v=20260811-wow3" defer></script>
+  <script src="/assets/js/main.js?v=20260811-wow4" defer></script>
 </body>
 </html>

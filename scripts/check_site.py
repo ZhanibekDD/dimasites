@@ -14,13 +14,16 @@ class Parser(HTMLParser):
         self.title = False
         self.description = False
         self.canonical = False
+        self.canonical_url = None
         self.h1 = 0
     def handle_starttag(self, tag, attrs):
         data = dict(attrs)
         if tag == "html": self.lang = data.get("lang")
         if tag == "title": self.title = True
         if tag == "meta" and data.get("name") == "description": self.description = bool(data.get("content"))
-        if tag == "link" and data.get("rel") == "canonical": self.canonical = bool(data.get("href"))
+        if tag == "link" and data.get("rel") == "canonical":
+            self.canonical_url = data.get("href")
+            self.canonical = bool(self.canonical_url)
         if tag == "h1": self.h1 += 1
         for key in ("href", "src", "action"):
             if key in data: self.links.append(data[key])
@@ -36,6 +39,7 @@ def target_exists(value: str) -> bool:
     return target.exists()
 
 errors = []
+canonical_urls = []
 for page in ROOT.rglob("*.html"):
     parser = Parser()
     parser.feed(page.read_text(encoding="utf-8"))
@@ -45,6 +49,7 @@ for page in ROOT.rglob("*.html"):
     if page.name != "404.html":
         if not parser.description: errors.append(f"{rel}: missing meta description")
         if not parser.canonical: errors.append(f"{rel}: missing canonical")
+        elif parser.canonical_url: canonical_urls.append((rel, parser.canonical_url))
     if parser.h1 != 1: errors.append(f"{rel}: expected exactly one h1, got {parser.h1}")
     for link in parser.links:
         if not target_exists(link): errors.append(f"{rel}: broken internal target {link}")
@@ -52,6 +57,11 @@ for page in ROOT.rglob("*.html"):
 required = [ROOT / "robots.txt", ROOT / "sitemap.xml", ROOT / ".htaccess", ROOT / "contact.php"]
 for item in required:
     if not item.exists(): errors.append(f"missing required file: {item.name}")
+
+sitemap = (ROOT / "sitemap.xml").read_text(encoding="utf-8") if (ROOT / "sitemap.xml").exists() else ""
+for rel, canonical in canonical_urls:
+    if f"<loc>{canonical}</loc>" not in sitemap:
+        errors.append(f"{rel}: canonical URL is missing from sitemap.xml")
 
 if errors:
     print("Site check failed:")
