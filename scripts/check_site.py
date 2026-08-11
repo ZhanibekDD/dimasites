@@ -59,6 +59,8 @@ required = [
     ROOT / "sitemap.xml",
     ROOT / ".htaccess",
     ROOT / "contact.php",
+    ROOT / "admin" / "index.php",
+    ROOT / "assets" / "css" / "admin.css",
     ROOT / "api" / "fns-company.php",
     ROOT / "proverka" / "index.html",
     ROOT / "proverka" / "poisk" / "index.html",
@@ -89,6 +91,16 @@ for marker in ("calculate_lead_score", "create_lead_id", "store_lead", "lead_sco
         errors.append(f"contact.php: missing production lead marker {marker}")
 if "+7 (3496) 43-57-67" in contact_gateway:
     errors.append("contact.php: obsolete fallback phone remains")
+
+admin_gateway = (ROOT / "admin" / "index.php").read_text(encoding="utf-8")
+for marker in ("secure_equals_legacy", "dnepr-private", "lead-status-", "format'] === 'csv'", "noindex"):
+    if marker not in admin_gateway:
+        errors.append(f"admin/index.php: missing protected lead console marker {marker}")
+
+admin_setup = (ROOT.parent / "scripts" / "timeweb_setup_admin.sh").read_text(encoding="utf-8")
+for marker in ("/dev/urandom", "password_hash", "chmod 0600", "shown only once"):
+    if marker not in admin_setup:
+        errors.append(f"timeweb_setup_admin.sh: missing secure setup marker {marker}")
 
 main_js = (ROOT / "assets" / "js" / "main.js").read_text(encoding="utf-8")
 for marker in ("lead_id", "lead_score", "lead_priority"):
