@@ -84,7 +84,7 @@ for item in required:
     if not item.exists(): errors.append(f"missing required file: {item.name}")
 
 gateway = (ROOT / "api" / "fns-company.php").read_text(encoding="utf-8")
-for marker in ("officialFields", "documents", "rsmppdf", "puchdocurl", "gosregurl", "counts"):
+for marker in ("officialFields", "documents", "rsmppdf", "puchdocurl", "gosregurl", "counts", "dnepr_egrul_fallback_search", "egrul.nalog.ru/search-result/"):
     if marker not in gateway:
         errors.append(f"fns-company.php: missing full-response marker {marker}")
 
@@ -96,7 +96,7 @@ if "+7 (3496) 43-57-67" in contact_gateway:
     errors.append("contact.php: obsolete fallback phone remains")
 
 admin_gateway = (ROOT / "admin" / "index.php").read_text(encoding="utf-8")
-for marker in ("secure_equals_legacy", "load_admin_config", ".access.php", "admin.json", "dnepr-private", "lead-status-", "source-query-", "format'] === 'sources'", "format'] === 'csv'", "noindex"):
+for marker in ("secure_equals_legacy", "load_admin_config", ".access.php", "admin.json", "dnepr-private", "lead-status-", "source-query-", "format'] === 'sources'", "format'] === 'csv'", "csv_safe_value", "curl_code", "stage", "noindex"):
     if marker not in admin_gateway:
         errors.append(f"admin/index.php: missing protected lead console marker {marker}")
 
@@ -123,7 +123,7 @@ for marker in ("Все поля ответа ФНС", "company-documents", "safe
         errors.append(f"stroypoisk.js: missing full FNS result UI marker {marker}")
 
 registry_gateway = (ROOT / "api" / "source-search.php").read_text(encoding="utf-8")
-for marker in ("source_parse_eis", "source_parse_egrz", "dnepr_source_http_post", "official-documents-page", "diagnosticId"):
+for marker in ("source_parse_eis", "source_parse_egrz", "dnepr_source_http_post", "official-documents-page", "explicit_empty", "response-validation", "diagnosticId"):
     if marker not in registry_gateway:
         errors.append(f"source-search.php: missing official registry adapter marker {marker}")
 

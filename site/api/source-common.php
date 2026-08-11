@@ -43,6 +43,12 @@ function dnepr_source_log($source, $query, $state, $diagnosticId, $meta)
         'result_count' => isset($meta['result_count']) ? (int) $meta['result_count'] : 0,
         'http_status' => isset($meta['http_status']) ? (int) $meta['http_status'] : 0,
         'latency_ms' => isset($meta['latency_ms']) ? (int) $meta['latency_ms'] : 0,
+        'curl_code' => isset($meta['curl_code']) ? (int) $meta['curl_code'] : 0,
+        'stage' => isset($meta['stage']) ? (string) $meta['stage'] : '',
+        'effective_url' => isset($meta['effective_url']) ? (string) $meta['effective_url'] : '',
+        'content_type' => isset($meta['content_type']) ? (string) $meta['content_type'] : '',
+        'body_bytes' => isset($meta['body_bytes']) ? (int) $meta['body_bytes'] : 0,
+        'body_hash' => isset($meta['body_hash']) ? (string) $meta['body_hash'] : '',
         'error_code' => isset($meta['error_code']) ? (string) $meta['error_code'] : '',
         'message' => isset($meta['message']) ? (string) $meta['message'] : ''
     );
@@ -111,7 +117,7 @@ function dnepr_source_absolute_url($base, $href, $allowedHosts)
     return $href;
 }
 
-function dnepr_source_http_request($method, $url, $headers, $cookieFile, $fields)
+function dnepr_source_http_request($method, $url, $headers, $cookieFile, $fields, $connectTimeout = 8, $timeout = 24)
 {
     if (!function_exists('curl_init')) {
         return array('ok' => false, 'status' => 0, 'errno' => -1, 'error' => 'curl_missing', 'body' => '', 'latency_ms' => 0);
@@ -120,8 +126,8 @@ function dnepr_source_http_request($method, $url, $headers, $cookieFile, $fields
     $curl = curl_init($url);
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, CURLOPT_HEADER, false);
-    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 8);
-    curl_setopt($curl, CURLOPT_TIMEOUT, 24);
+    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, (int) $connectTimeout);
+    curl_setopt($curl, CURLOPT_TIMEOUT, (int) $timeout);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($curl, CURLOPT_MAXREDIRS, 3);
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, true);
@@ -152,26 +158,31 @@ function dnepr_source_http_request($method, $url, $headers, $cookieFile, $fields
     $error = curl_error($curl);
     $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
     $effectiveUrl = (string) curl_getinfo($curl, CURLINFO_EFFECTIVE_URL);
+    $contentType = (string) curl_getinfo($curl, CURLINFO_CONTENT_TYPE);
     curl_close($curl);
+    $safeBody = $body === false ? '' : $body;
     return array(
         'ok' => $body !== false && $errno === 0 && $status >= 200 && $status < 400,
         'status' => $status,
         'errno' => $errno,
         'error' => $error,
-        'body' => $body === false ? '' : $body,
+        'body' => $safeBody,
         'url' => $effectiveUrl,
+        'content_type' => $contentType,
+        'body_bytes' => strlen($safeBody),
+        'body_hash' => $safeBody === '' ? '' : hash('sha256', $safeBody),
         'latency_ms' => (int) round((microtime(true) - $started) * 1000)
     );
 }
 
-function dnepr_source_http_get($url, $headers, $cookieFile)
+function dnepr_source_http_get($url, $headers, $cookieFile, $connectTimeout = 8, $timeout = 24)
 {
-    return dnepr_source_http_request('GET', $url, $headers, $cookieFile, array());
+    return dnepr_source_http_request('GET', $url, $headers, $cookieFile, array(), $connectTimeout, $timeout);
 }
 
-function dnepr_source_http_post($url, $headers, $cookieFile, $fields)
+function dnepr_source_http_post($url, $headers, $cookieFile, $fields, $connectTimeout = 8, $timeout = 24)
 {
-    return dnepr_source_http_request('POST', $url, $headers, $cookieFile, $fields);
+    return dnepr_source_http_request('POST', $url, $headers, $cookieFile, $fields, $connectTimeout, $timeout);
 }
 
 function dnepr_source_failure_message($errno, $status)

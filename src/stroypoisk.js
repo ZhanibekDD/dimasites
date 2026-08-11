@@ -370,16 +370,18 @@ function renderCompanyData(payload) {
   const total = Number(payload.total || companies.length);
   const legalCount = Number(payload.counts?.legalEntities || 0);
   const entrepreneurCount = Number(payload.counts?.entrepreneurs || 0);
+  const fallback = Boolean(payload.partial || payload.source?.fallback);
+  const sourceName = payload.source?.name || 'ФНС России';
   ui.companyProfile.hidden = false;
-  setCompanyState('found', `${payload.source?.cached ? 'Ответ ФНС · кэш' : 'Ответ ФНС · получен'} · ${total}`);
+  setCompanyState('found', `${fallback ? 'Резервный ответ ФНС' : (payload.source?.cached ? 'Ответ ФНС · кэш' : 'Ответ ФНС · получен')} · ${total}`);
   ui.companyProfileBody.innerHTML = `
     <div class="fns-response-summary">
-      <div><span>ПОЛНЫЙ ОТВЕТ ПОИСКА</span><strong>${total}</strong><p>Найдено записей. На странице показаны все ${companies.length} записей, возвращённые текущим ответом ФНС.</p></div>
-      <dl><div><dt>Юридические лица</dt><dd>${legalCount}</dd></div><div><dt>Индивидуальные предприниматели</dt><dd>${entrepreneurCount}</dd></div><div><dt>Источник</dt><dd>pb.nalog.ru</dd></div></dl>
+      <div><span>${fallback ? 'РЕЗЕРВНЫЙ ОФИЦИАЛЬНЫЙ ОТВЕТ' : 'ПОЛНЫЙ ОТВЕТ ПОИСКА'}</span><strong>${total}</strong><p>${fallback ? 'Основной сервис не ответил. Показаны записи официального ЕГРЮЛ / ЕГРИП; расширенные разделы появятся после восстановления «Прозрачного бизнеса».' : `Найдено записей. На странице показаны все ${companies.length} записей, возвращённые текущим ответом ФНС.`}</p></div>
+      <dl><div><dt>Юридические лица</dt><dd>${legalCount}</dd></div><div><dt>Индивидуальные предприниматели</dt><dd>${entrepreneurCount}</dd></div><div><dt>Источник</dt><dd>${escapeHtml(sourceName)}</dd></div></dl>
     </div>
     <div class="company-results">${companies.map((company, index) => renderCompanyRecord(company, index, companies.length, payload)).join('')}</div>
     ${renderFnsSections(payload)}
-    <p class="company-disclaimer">${escapeHtml(payload.disclaimer || 'Для юридически значимого решения сформируйте актуальную выписку ЕГРЮЛ или ЕГРИП.')}</p>`;
+    <p class="company-disclaimer">${fallback ? '<strong>Резервный официальный источник.</strong> ' : ''}${escapeHtml(payload.disclaimer || 'Для юридически значимого решения сформируйте актуальную выписку ЕГРЮЛ или ЕГРИП.')}</p>`;
 }
 
 async function fetchCompanyProfile(force = false) {
@@ -397,7 +399,7 @@ async function fetchCompanyProfile(force = false) {
   if (companyRequestController) companyRequestController.abort();
   const controller = new AbortController();
   companyRequestController = controller;
-  const timeout = setTimeout(() => controller.abort(), 32000);
+  const timeout = setTimeout(() => controller.abort(), 45000);
   try {
     const response = await fetch('/api/fns-company.php', {
       method: 'POST',
@@ -423,7 +425,7 @@ async function fetchCompanyProfile(force = false) {
       return;
     }
     const company = payload.companies[0];
-    markFnsSource('found', `ФНС вернула записей: ${payload.total || payload.companies.length}. Первая: ${company.shortName || company.fullName}; ИНН ${company.inn}; ОГРН ${company.ogrn}`, payload.source?.retrievedAt);
+    markFnsSource('found', `${payload.source?.fallback ? 'Резерв ЕГРЮЛ / ЕГРИП' : 'ФНС'} вернул записей: ${payload.total || payload.companies.length}. Первая: ${company.shortName || company.fullName}; ИНН ${company.inn}; ОГРН ${company.ogrn}`, payload.source?.retrievedAt);
     persist();
     renderCompanyData(payload);
   } catch (error) {
@@ -478,7 +480,7 @@ async function fetchRegistrySource(sourceId, force = false) {
   sourceRequestControllers.set(sourceId, controller);
   record.loading = true;
   renderRoutes();
-  const timeout = setTimeout(() => controller.abort(), 32000);
+  const timeout = setTimeout(() => controller.abort(), 55000);
   try {
     const response = await fetch('/api/source-search.php', {
       method: 'POST',

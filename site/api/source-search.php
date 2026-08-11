@@ -28,6 +28,27 @@ function source_parse_attributes($tag)
     return $attributes;
 }
 
+function source_response_marker($html, $markers)
+{
+    foreach ($markers as $marker) {
+        if (stripos($html, $marker) !== false) { return true; }
+    }
+    return false;
+}
+
+function source_response_diagnostics($response)
+{
+    return array(
+        'http_status' => isset($response['status']) ? $response['status'] : 0,
+        'latency_ms' => isset($response['latency_ms']) ? $response['latency_ms'] : 0,
+        'curl_code' => isset($response['errno']) ? $response['errno'] : 0,
+        'effective_url' => isset($response['url']) ? $response['url'] : '',
+        'content_type' => isset($response['content_type']) ? $response['content_type'] : '',
+        'body_bytes' => isset($response['body_bytes']) ? $response['body_bytes'] : 0,
+        'body_hash' => isset($response['body_hash']) ? $response['body_hash'] : ''
+    );
+}
+
 function source_parse_eis($html, $baseUrl)
 {
     $results = array();
@@ -77,21 +98,22 @@ function source_parse_eis($html, $baseUrl)
             }
         }
     }
-    return $results;
+    $normalized = dnepr_source_normalize_text($html);
+    $blocked = source_response_marker($normalized, array('проверить, что вы не робот', 'подтвердите, что вы человек', 'captcha', 'доступ ограничен', 'access denied'));
+    $explicitEmpty = source_response_marker($normalized, array('По вашему запросу ничего не найдено', 'По заданным параметрам ничего не найдено', 'Поиск не дал результатов', 'Всего записей: 0'));
+    $recognized = count($results) > 0 || $explicitEmpty || source_response_marker($html, array('search-registry-entry-block', 'registry-entry__header', 'Единая информационная система в сфере закупок'));
+    return array('results' => $results, 'recognized' => $recognized, 'explicit_empty' => $explicitEmpty, 'blocked' => $blocked);
 }
 
 function source_egrz_search_request($query, $cookieFile)
 {
-    $base = 'https://egrz.ru/organisation/reestr/latest';
-    if (preg_match('/^\d{2}-\d-\d-\d-\d{6}-\d{4}$/', $query)) {
-        return dnepr_source_http_get('https://egrz.ru/organisation/reestr/detail/' . rawurlencode($query), array('Accept: text/html,application/xhtml+xml', 'Accept-Language: ru-RU,ru;q=0.9', 'Referer: https://egrz.ru/organisation/reestr/latest'), $cookieFile);
-    }
+    $base = 'https://egrz.ru/organisation/reestr-advance/latest';
     $initial = dnepr_source_http_get($base, array('Accept: text/html,application/xhtml+xml', 'Accept-Language: ru-RU,ru;q=0.9'), $cookieFile);
     if (empty($initial['ok'])) { return $initial; }
     $form = '';
     if (preg_match_all('/<form\b[^>]*>.*?<\/form>/isu', $initial['body'], $forms)) {
         foreach ($forms[0] as $candidate) {
-            if (stripos($candidate, 'Введите поисковый запрос') !== false || stripos($candidate, 'номер / дата заключения') !== false) { $form = $candidate; break; }
+            if (stripos($candidate, 'Номер заключения экспертизы') !== false || stripos($candidate, '00-0-0-0-000000-0000') !== false || stripos($candidate, 'ИНН, КПП, ОГРН') !== false) { $form = $candidate; break; }
         }
     }
     if ($form === '') {
@@ -103,6 +125,7 @@ function source_egrz_search_request($query, $cookieFile)
     preg_match('/<form\b[^>]*>/isu', $form, $formTagMatch);
     $formAttributes = source_parse_attributes(isset($formTagMatch[0]) ? $formTagMatch[0] : '');
     $inputName = '';
+    $inputCandidates = array();
     $formFields = array();
     if (preg_match_all('/<input\b[^>]*>/isu', $form, $inputs)) {
         foreach ($inputs[0] as $inputTag) {
@@ -114,10 +137,21 @@ function source_egrz_search_request($query, $cookieFile)
                 }
             }
             $placeholder = isset($attributes['placeholder']) ? $attributes['placeholder'] : '';
-            if (stripos($placeholder, 'поисков') !== false || stripos($placeholder, 'заключения') !== false) {
-                if (isset($attributes['name'])) { $inputName = $attributes['name']; }
-                break;
+            if (isset($attributes['name']) && $placeholder !== '') {
+                $inputCandidates[] = array('name' => $attributes['name'], 'placeholder' => $placeholder);
             }
+        }
+    }
+    $isConclusionNumber = preg_match('/^\d{2}-\d-\d-\d-\d{6}-\d{4}$/', $query);
+    foreach ($inputCandidates as $candidate) {
+        $placeholder = $candidate['placeholder'];
+        if ($isConclusionNumber && (stripos($placeholder, '00-0-0-0-000000-0000') !== false || stripos($placeholder, 'номер заключения') !== false)) {
+            $inputName = $candidate['name'];
+            break;
+        }
+        if (!$isConclusionNumber && (stripos($placeholder, 'ИНН') !== false || stripos($placeholder, 'наименование') !== false || stripos($placeholder, 'адрес') !== false)) {
+            $inputName = $candidate['name'];
+            break;
         }
     }
     if ($inputName === '') {
@@ -171,13 +205,18 @@ function source_parse_egrz($html, $baseUrl, $query)
             }
         }
     }
+    $text = dnepr_source_normalize_text($html);
     if (count($results) === 0 && preg_match('/^\d{2}-\d-\d-\d-\d{6}-\d{4}$/', $query)) {
-        $text = dnepr_source_normalize_text($html);
-        if ($text !== '' && stripos($text, 'страница не найдена') === false && stripos($text, 'Bad Gateway') === false) {
+        $hasExactNumber = stripos($text, $query) !== false;
+        $hasConclusionContext = source_response_marker($text, array('Номер заключения экспертизы', 'Заключение экспертизы', 'Результат проведенной экспертизы'));
+        if ($hasExactNumber && $hasConclusionContext) {
             $results[] = array('id' => $query, 'number' => $query, 'title' => 'Заключение № ' . $query, 'summary' => function_exists('mb_substr') ? mb_substr($text, 0, 1200, 'UTF-8') : substr($text, 0, 1200), 'url' => 'https://egrz.ru/organisation/reestr/detail/' . rawurlencode($query), 'documents' => array());
         }
     }
-    return array('results' => $results, 'files' => array_values($files));
+    $blocked = source_response_marker($text, array('проверить, что вы не робот', 'подтвердите, что вы человек', 'captcha', 'доступ ограничен', 'access denied'));
+    $explicitEmpty = source_response_marker($text, array('По вашему запросу ничего не найдено', 'По заданным параметрам ничего не найдено', 'Поиск не дал результатов', 'Записи не найдены'));
+    $recognized = count($results) > 0 || $explicitEmpty || source_response_marker($text, array('Расширенный поиск', 'Номер заключения экспертизы', 'ГИС ЕГРЗ'));
+    return array('results' => $results, 'files' => array_values($files), 'recognized' => $recognized, 'explicit_empty' => $explicitEmpty, 'blocked' => $blocked);
 }
 
 if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -208,11 +247,12 @@ if ($source === 'eis') {
         . '&morphology=on&pageNumber=1&sortDirection=false&recordsPerPage=_10&showLotsInfoHidden=false&sortBy=UPDATE_DATE'
         . '&fz44=on&fz223=on&af=on&ca=on&pc=on&pa=on&currencyIdGeneral=-1';
     $response = dnepr_source_http_get($url, array('Accept: text/html,application/xhtml+xml', 'Accept-Language: ru-RU,ru;q=0.9', 'Referer: https://zakupki.gov.ru/'), $cookieFile);
-    $results = !empty($response['ok']) ? source_parse_eis($response['body'], $url) : array();
+    $parsed = !empty($response['ok']) ? source_parse_eis($response['body'], $url) : array('results' => array(), 'recognized' => false, 'explicit_empty' => false, 'blocked' => false);
+    $results = $parsed['results'];
     $files = array();
 } else {
     $response = source_egrz_search_request($query, $cookieFile);
-    $parsed = !empty($response['ok']) ? source_parse_egrz($response['body'], isset($response['url']) && $response['url'] !== '' ? $response['url'] : 'https://egrz.ru/organisation/reestr/latest', $query) : array('results' => array(), 'files' => array());
+    $parsed = !empty($response['ok']) ? source_parse_egrz($response['body'], isset($response['url']) && $response['url'] !== '' ? $response['url'] : 'https://egrz.ru/organisation/reestr-advance/latest', $query) : array('results' => array(), 'files' => array(), 'recognized' => false, 'explicit_empty' => false, 'blocked' => false);
     $results = $parsed['results'];
     $files = $parsed['files'];
 }
@@ -221,12 +261,41 @@ if ($cookieFile !== '') { @unlink($cookieFile); }
 if (empty($response['ok'])) {
     $code = isset($response['error']) && strpos($response['error'], 'discoverable') !== false ? 'integration_changed' : 'source_unavailable';
     $message = $code === 'integration_changed' ? 'Официальный реестр изменил поисковую форму. Автопроверка остановлена, чтобы не показывать недостоверные данные.' : dnepr_source_failure_message($response['errno'], $response['status']);
-    dnepr_source_log($source, $query, 'unavailable', $diagnosticId, array('http_status' => $response['status'], 'latency_ms' => $response['latency_ms'], 'error_code' => $code, 'message' => $message));
+    $logMeta = source_response_diagnostics($response);
+    $logMeta['stage'] = 'transport';
+    $logMeta['error_code'] = $code;
+    $logMeta['message'] = $message;
+    dnepr_source_log($source, $query, 'unavailable', $diagnosticId, $logMeta);
     source_reply(502, array('ok' => false, 'code' => $code, 'message' => $message, 'diagnosticId' => $diagnosticId, 'technical' => array('httpStatus' => $response['status'], 'curlCode' => $response['errno'])));
 }
 
+if (!empty($parsed['blocked'])) {
+    $message = 'Официальный источник запросил ручную проверку или ограничил автоматический доступ.';
+    $logMeta = source_response_diagnostics($response);
+    $logMeta['stage'] = 'response-validation';
+    $logMeta['error_code'] = 'source_blocked';
+    $logMeta['message'] = $message;
+    dnepr_source_log($source, $query, 'unavailable', $diagnosticId, $logMeta);
+    source_reply(503, array('ok' => false, 'code' => 'source_blocked', 'message' => $message, 'diagnosticId' => $diagnosticId));
+}
+
+if (count($results) === 0 && (empty($parsed['recognized']) || empty($parsed['explicit_empty']))) {
+    $message = 'Ответ официального источника получен, но формат результата не подтверждён. Нулевой результат не сохранён.';
+    $logMeta = source_response_diagnostics($response);
+    $logMeta['stage'] = 'response-validation';
+    $logMeta['error_code'] = 'integration_changed';
+    $logMeta['message'] = $message;
+    dnepr_source_log($source, $query, 'unavailable', $diagnosticId, $logMeta);
+    source_reply(502, array('ok' => false, 'code' => 'integration_changed', 'message' => $message, 'diagnosticId' => $diagnosticId, 'technical' => array('httpStatus' => $response['status'], 'contentType' => isset($response['content_type']) ? $response['content_type'] : '', 'bodyBytes' => isset($response['body_bytes']) ? $response['body_bytes'] : 0)));
+}
+
 $state = count($results) > 0 ? 'found' : 'missing';
-dnepr_source_log($source, $query, $state, $diagnosticId, array('result_count' => count($results), 'http_status' => $response['status'], 'latency_ms' => $response['latency_ms'], 'results' => $results, 'files' => $files));
+$logMeta = source_response_diagnostics($response);
+$logMeta['stage'] = 'parsed-response';
+$logMeta['result_count'] = count($results);
+$logMeta['results'] = $results;
+$logMeta['files'] = $files;
+dnepr_source_log($source, $query, $state, $diagnosticId, $logMeta);
 source_reply(200, array(
     'ok' => true,
     'found' => count($results) > 0,
