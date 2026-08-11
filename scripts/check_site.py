@@ -75,6 +75,24 @@ required = [
 for item in required:
     if not item.exists(): errors.append(f"missing required file: {item.name}")
 
+gateway = (ROOT / "api" / "fns-company.php").read_text(encoding="utf-8")
+for marker in ("officialFields", "documents", "rsmppdf", "puchdocurl", "gosregurl", "counts"):
+    if marker not in gateway:
+        errors.append(f"fns-company.php: missing full-response marker {marker}")
+
+search_source = (ROOT.parent / "src" / "stroypoisk.js").read_text(encoding="utf-8")
+if "sources: ['fns-profile', 'egrz', 'eis']" not in search_source:
+    errors.append("stroypoisk.js: company route must contain one FNS source without duplicate extract card")
+for marker in ("Все поля ответа ФНС", "company-documents", "safeOfficialHref"):
+    if marker not in search_source:
+        errors.append(f"stroypoisk.js: missing full FNS result UI marker {marker}")
+
+about_html = (ROOT / "about" / "index.html").read_text(encoding="utf-8")
+projects_html = (ROOT / "projects" / "index.html").read_text(encoding="utf-8")
+for page_name, content in (("about/index.html", about_html), ("projects/index.html", projects_html)):
+    if "sports-court.svg" in content or "stadium-stands.svg" in content:
+        errors.append(f"{page_name}: schematic image remains where a real company photo is required")
+
 sitemap = (ROOT / "sitemap.xml").read_text(encoding="utf-8") if (ROOT / "sitemap.xml").exists() else ""
 for rel, canonical in canonical_urls:
     if f"<loc>{canonical}</loc>" not in sitemap:
