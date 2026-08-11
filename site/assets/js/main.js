@@ -45,7 +45,8 @@
   mobileActionBar.className = 'mobile-action-bar';
   mobileActionBar.setAttribute('aria-label', 'Быстрые действия');
   const auditHref = document.querySelector('#audit') ? '#audit' : '/#audit';
-  mobileActionBar.innerHTML = `<a href="tel:+73496453002">Позвонить</a><a href="${auditHref}">Оценить проект</a>`;
+  const analyzerHref = document.querySelector('#analyzer') ? '#analyzer' : null;
+  mobileActionBar.innerHTML = `<a href="tel:+73496453002">Позвонить</a><a href="${analyzerHref || auditHref}">${analyzerHref ? 'Проверить документ' : 'Оценить проект'}</a>`;
   document.body.append(mobileActionBar);
 
   const revealItems = document.querySelectorAll('[data-reveal]');
