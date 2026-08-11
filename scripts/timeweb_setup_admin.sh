@@ -4,10 +4,13 @@ set -eu
 PRIVATE_DIRECTORY="${HOME}/dnepr-private"
 CONFIG_FILE="${PRIVATE_DIRECTORY}/admin.json"
 LEGACY_CONFIG_FILE="${PRIVATE_DIRECTORY}/admin.php"
+PUBLIC_ADMIN_DIRECTORY="${HOME}/public_html/admin"
+WEB_CONFIG_FILE="${PUBLIC_ADMIN_DIRECTORY}/.access.php"
 ADMIN_USER="dnepr"
 
 umask 077
 mkdir -p "${PRIVATE_DIRECTORY}"
+mkdir -p "${PUBLIC_ADMIN_DIRECTORY}"
 
 if [ -f "${CONFIG_FILE}" ]; then
     BACKUP_FILE="${CONFIG_FILE}.backup-$(date +%Y%m%d-%H%M%S)"
@@ -38,13 +41,38 @@ EOF
 
 mv "${TEMP_CONFIG_FILE}" "${CONFIG_FILE}"
 
+TEMP_WEB_CONFIG_FILE="${WEB_CONFIG_FILE}.tmp"
+cat > "${TEMP_WEB_CONFIG_FILE}" <<EOF
+<?php
+if (!defined('DNEPR_ADMIN_BOOTSTRAP')) {
+    header('HTTP/1.1 404 Not Found');
+    exit;
+}
+return array(
+    'version' => 3,
+    'username' => '${ADMIN_USER}',
+    'salt' => '${ADMIN_SALT}',
+    'password_hash' => '${PASSWORD_HASH}',
+    'data_directory' => '${PRIVATE_DIRECTORY}'
+);
+EOF
+
+mv "${TEMP_WEB_CONFIG_FILE}" "${WEB_CONFIG_FILE}"
+
 chmod 0700 "${PRIVATE_DIRECTORY}"
 chmod 0600 "${CONFIG_FILE}"
+chmod 0600 "${WEB_CONFIG_FILE}"
+
+if [ ! -s "${WEB_CONFIG_FILE}" ]; then
+    echo "Admin access file was not created: ${WEB_CONFIG_FILE}"
+    exit 1
+fi
 
 echo ""
 echo "DNEPR Lead Engine access created."
 echo "URL: https://stroydnepr.ru/admin/"
 echo "Login: ${ADMIN_USER}"
 echo "Password: ${ADMIN_PASSWORD}"
+echo "Config: ${WEB_CONFIG_FILE}"
 echo ""
 echo "Save this password now. It is shown only once."
