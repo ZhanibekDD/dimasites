@@ -10,6 +10,17 @@ function dnepr_source_diagnostic_id($source)
     return strtoupper($source) . '-' . gmdate('Ymd-His') . '-' . substr(sha1(uniqid('', true) . mt_rand()), 0, 8);
 }
 
+function dnepr_source_request_body()
+{
+    if (PHP_SAPI === 'cli') {
+        $smokeInput = getenv('DNEPR_SOURCE_TEST_INPUT');
+        if ($smokeInput !== false && $smokeInput !== '') {
+            return $smokeInput;
+        }
+    }
+    return (string) file_get_contents('php://input');
+}
+
 function dnepr_source_private_directory()
 {
     $candidates = array();

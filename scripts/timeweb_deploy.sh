@@ -5,6 +5,10 @@ DEPLOY_REPOSITORY="${HOME}/dimasites-deploy"
 PUBLIC_DIRECTORY="${HOME}/public_html"
 DEPLOY_LOCK="${HOME}/.dimasites-deploy-lock"
 MANAGED_MARKER="${PUBLIC_DIRECTORY}/.dimasites-managed"
+DEPLOY_ID="$(date +%Y%m%d-%H%M%S)-$$"
+ROLLBACK_DIRECTORY="${HOME}/.dimasites-rollback-${DEPLOY_ID}"
+DEPLOY_STARTED=0
+DEPLOY_SUCCEEDED=0
 
 if ! mkdir "${DEPLOY_LOCK}" 2>/dev/null; then
     echo "Another deployment is already running."
@@ -14,7 +18,21 @@ fi
 cleanup_lock() {
     rmdir "${DEPLOY_LOCK}" 2>/dev/null || true
 }
-trap cleanup_lock EXIT
+
+cleanup_deploy() {
+    if [ "${DEPLOY_STARTED}" -eq 1 ] && [ "${DEPLOY_SUCCEEDED}" -ne 1 ] && [ -d "${ROLLBACK_DIRECTORY}" ]; then
+        echo "Deployment failed. Restoring the previous live version..."
+        rsync -a --delete "${ROLLBACK_DIRECTORY}/" "${PUBLIC_DIRECTORY}/" || true
+        echo "Previous live version restored."
+    fi
+    if [ -d "${ROLLBACK_DIRECTORY}" ]; then
+        case "${ROLLBACK_DIRECTORY}" in
+            "${HOME}"/.dimasites-rollback-*) find "${ROLLBACK_DIRECTORY}" -depth -delete 2>/dev/null || true ;;
+        esac
+    fi
+    cleanup_lock
+}
+trap cleanup_deploy EXIT
 trap 'exit 1' HUP INT TERM
 
 if [ ! -d "${DEPLOY_REPOSITORY}/.git" ]; then
@@ -46,6 +64,27 @@ fi
 
 python3 "${DEPLOY_REPOSITORY}/scripts/check_site.py"
 
+if ! command -v php >/dev/null 2>&1; then
+    echo "Release gate failed: PHP CLI is not available. The live site is unchanged."
+    exit 1
+fi
+
+if ! php -r 'exit(function_exists("curl_init") && class_exists("DOMDocument") ? 0 : 1);'; then
+    echo "Release gate failed: PHP CLI needs curl and DOM extensions. The live site is unchanged."
+    exit 1
+fi
+
+printf '%s\n' "$(git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD)" > "${DEPLOY_REPOSITORY}/site/.deploy-version"
+
+echo "Testing candidate against real FNS, EGRZ and EIS records..."
+if ! python3 "${DEPLOY_REPOSITORY}/scripts/production_smoke.py" \
+    --document-root "${DEPLOY_REPOSITORY}/site" \
+    --php-bin "$(command -v php)" \
+    --expected-version "$(git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD)"; then
+    echo "Release gate rejected the candidate. The live site is unchanged."
+    exit 1
+fi
+
 mkdir -p "${PUBLIC_DIRECTORY}"
 if [ ! -f "${MANAGED_MARKER}" ]; then
     BACKUP_ARCHIVE="${HOME}/stroydnepr-before-git-$(date +%Y%m%d-%H%M%S).tar.gz"
@@ -53,9 +92,21 @@ if [ ! -f "${MANAGED_MARKER}" ]; then
     echo "Initial backup created: ${BACKUP_ARCHIVE}"
 fi
 
+mkdir -p "${ROLLBACK_DIRECTORY}"
+rsync -a "${PUBLIC_DIRECTORY}/" "${ROLLBACK_DIRECTORY}/"
+DEPLOY_STARTED=1
+
 rsync -a --delete --exclude='.well-known/' --exclude='admin/.access.php' \
     "${DEPLOY_REPOSITORY}/site/" "${PUBLIC_DIRECTORY}/"
 
 git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD > "${PUBLIC_DIRECTORY}/.deploy-version"
 touch "${MANAGED_MARKER}"
-echo "Stroydnepr.ru deployed successfully."
+
+echo "Verifying the published release marker..."
+python3 "${DEPLOY_REPOSITORY}/scripts/production_smoke.py" \
+    --base-url "https://stroydnepr.ru" \
+    --expected-version "$(git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD)" \
+    --release-only --attempts 1
+
+DEPLOY_SUCCEEDED=1
+echo "Stroydnepr.ru deployed successfully after real source checks."

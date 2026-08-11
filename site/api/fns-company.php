@@ -438,7 +438,7 @@ if ($origin !== '' && $origin !== 'https://stroydnepr.ru' && $origin !== 'https:
     dnepr_respond(403, array('ok' => false, 'code' => 'origin_denied', 'message' => 'Запрос разрешён только с сайта ДНЕПР.'));
 }
 
-$input = json_decode((string) file_get_contents('php://input'), true);
+$input = json_decode(dnepr_source_request_body(), true);
 $query = is_array($input) && isset($input['query']) ? $input['query'] : (isset($_POST['query']) ? $_POST['query'] : '');
 $query = dnepr_clean_query($query);
 $length = function_exists('mb_strlen') ? mb_strlen($query, 'UTF-8') : strlen($query);

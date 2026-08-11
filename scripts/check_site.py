@@ -65,6 +65,7 @@ required = [
     ROOT / "api" / "fns-company.php",
     ROOT / "api" / "source-common.php",
     ROOT / "api" / "source-search.php",
+    ROOT / "api" / "release.php",
     ROOT / "proverka" / "index.html",
     ROOT / "proverka" / "poisk" / "index.html",
     ROOT / "proverka" / "navigator" / "index.html",
