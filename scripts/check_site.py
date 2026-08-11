@@ -54,7 +54,21 @@ for page in ROOT.rglob("*.html"):
     for link in parser.links:
         if not target_exists(link): errors.append(f"{rel}: broken internal target {link}")
 
-required = [ROOT / "robots.txt", ROOT / "sitemap.xml", ROOT / ".htaccess", ROOT / "contact.php"]
+required = [
+    ROOT / "robots.txt",
+    ROOT / "sitemap.xml",
+    ROOT / ".htaccess",
+    ROOT / "contact.php",
+    ROOT / "proverka" / "index.html",
+    ROOT / "assets" / "js" / "proverka.bundle.js",
+    ROOT / "assets" / "vendor" / "pdfjs" / "pdf.min.mjs",
+    ROOT / "assets" / "vendor" / "pdfjs" / "pdf.worker.min.mjs",
+    ROOT / "assets" / "vendor" / "tesseract" / "worker.min.js",
+    ROOT / "assets" / "vendor" / "tesseract" / "core" / "tesseract-core-lstm.js",
+    ROOT / "assets" / "vendor" / "tesseract" / "core" / "tesseract-core-lstm.wasm",
+    ROOT / "assets" / "vendor" / "tesseract" / "lang" / "rus.traineddata.gz",
+    ROOT / "assets" / "vendor" / "tesseract" / "lang" / "eng.traineddata.gz",
+]
 for item in required:
     if not item.exists(): errors.append(f"missing required file: {item.name}")
 

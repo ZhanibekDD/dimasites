@@ -4,3 +4,6 @@ Thumbs.db
 .idea/
 .vscode/
 node_modules/
+npm-debug.log*
+__pycache__/
+*.py[cod]

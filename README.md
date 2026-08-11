@@ -44,6 +44,14 @@ FTP-секреты GitHub не используются: сервер Timeweb н
 ## Локальная проверка
 
 ```bash
+npm install
+npm run build
 python3 scripts/check_site.py
 python3 -m http.server 8080 --directory site
 ```
+
+## Рабочий инструмент `/proverka/`
+
+Страница выполняет настоящий локальный анализ PDF, DOCX, XLSX и изображений. PDF со сканами и изображения проходят OCR на русском и английском. В репозитории хранятся локальные worker, OCR core и языковые модели — внешние CDN в production не используются.
+
+После изменения `src/proverka.js` обязательно выполните `npm run build` и включите обновлённые файлы из `site/assets/js/` и `site/assets/vendor/` в Pull Request.
