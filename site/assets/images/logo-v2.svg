@@ -11,9 +11,12 @@
       <stop offset="1" stop-color="#3D4E57"/>
     </linearGradient>
   </defs>
-  <path fill="url(#yellow)" d="M4 4h56v43H49L32 30 15 47H4V4Z"/>
-  <path fill="#FFFFFF" d="M4 45h10l18-18 18 18h10v11H48L32 40 16 56H4V45Z"/>
-  <path fill="url(#steel)" d="M4 55h13l15-15 15 15h13v5H45L32 47 19 60H4v-5Z"/>
-  <path fill="none" stroke="#7F939D" stroke-opacity=".68" stroke-width="1.25" d="m18 56 14-14 14 14"/>
+  <!-- Жёлтый исходный квадрат с тем же горным вырезом, что и в старом знаке. -->
+  <path fill="url(#yellow)" d="M4 4h56v41H49L32 28 15 45H4V4Z"/>
+  <!-- Белым заменена именно прежняя чёрная задняя гора: снег, а не новая плашка. -->
+  <path fill="#FFFFFF" d="M4 45h11l17-17 17 17h11v12H47L32 42 17 57H4V45Z"/>
+  <!-- Стальная передняя гора сохранена отдельным нижним слоем. -->
+  <path fill="url(#steel)" d="M4 54h14l14-14 14 14h14v6H45L32 47 19 60H4v-6Z"/>
+  <path fill="none" stroke="#7F939D" stroke-opacity=".62" stroke-width="1" d="m19 56 13-13 13 13"/>
   <path fill="#FFF4B8" fill-opacity=".7" d="M7 7h50v1.25H7z"/>
 </svg>

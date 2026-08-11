@@ -165,6 +165,16 @@ function dnepr_safe_official_url($value, $allowedHosts)
     return $value;
 }
 
+function dnepr_row_value($row, $keys)
+{
+    foreach ($keys as $key) {
+        if (isset($row[$key]) && trim((string) $row[$key]) !== '') {
+            return (string) $row[$key];
+        }
+    }
+    return '';
+}
+
 if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');
     dnepr_respond(405, array('ok' => false, 'code' => 'method_not_allowed', 'message' => 'Используйте POST-запрос.'));
@@ -252,24 +262,39 @@ if ($result === null) {
     dnepr_respond(502, array('ok' => false, 'code' => 'source_timeout', 'message' => 'ФНС не успела подготовить ответ. Повторите проверку.'));
 }
 
-$rows = isset($result['ul']['data']) && is_array($result['ul']['data']) ? $result['ul']['data'] : array();
+$legalRows = isset($result['ul']['data']) && is_array($result['ul']['data']) ? $result['ul']['data'] : array();
+$entrepreneurRows = isset($result['ip']['data']) && is_array($result['ip']['data']) ? $result['ip']['data'] : array();
+$rows = array();
+foreach ($legalRows as $row) {
+    if (is_array($row)) {
+        $row['_dneprEntityType'] = 'legal_entity';
+        $rows[] = $row;
+    }
+}
+foreach ($entrepreneurRows as $row) {
+    if (is_array($row)) {
+        $row['_dneprEntityType'] = 'entrepreneur';
+        $rows[] = $row;
+    }
+}
 $companies = array();
 foreach ($rows as $row) {
     if (!is_array($row)) {
         continue;
     }
     $companies[] = array(
-        'shortName' => isset($row['namec']) ? (string) $row['namec'] : '',
-        'fullName' => isset($row['namep']) ? (string) $row['namep'] : '',
-        'status' => isset($row['sulst_name_ex']) ? (string) $row['sulst_name_ex'] : '',
-        'inn' => isset($row['inn']) ? (string) $row['inn'] : '',
-        'ogrn' => isset($row['ogrn']) ? (string) $row['ogrn'] : '',
-        'registeredAt' => isset($row['dtreg']) ? (string) $row['dtreg'] : '',
-        'ogrnAssignedAt' => isset($row['dtogrn']) ? (string) $row['dtogrn'] : '',
-        'region' => isset($row['regionname']) ? (string) $row['regionname'] : '',
-        'okved' => isset($row['okved2main']) ? (string) $row['okved2main'] : (isset($row['okved2']) ? (string) $row['okved2'] : ''),
-        'okvedName' => isset($row['okved2mainname']) ? (string) $row['okved2mainname'] : (isset($row['okved2name']) ? (string) $row['okved2name'] : ''),
-        'reportingYear' => isset($row['yearcode']) ? (string) $row['yearcode'] : '',
+        'entityType' => isset($row['_dneprEntityType']) ? $row['_dneprEntityType'] : 'legal_entity',
+        'shortName' => dnepr_row_value($row, array('namec', 'fio', 'namep')),
+        'fullName' => dnepr_row_value($row, array('namep', 'fio', 'namec')),
+        'status' => dnepr_row_value($row, array('sulst_name_ex', 'sipst_name_ex', 'statusname')),
+        'inn' => dnepr_row_value($row, array('inn')),
+        'ogrn' => dnepr_row_value($row, array('ogrn', 'ogrnip')),
+        'registeredAt' => dnepr_row_value($row, array('dtreg', 'dtogrnip', 'dtogrn')),
+        'ogrnAssignedAt' => dnepr_row_value($row, array('dtogrn', 'dtogrnip')),
+        'region' => dnepr_row_value($row, array('regionname')),
+        'okved' => dnepr_row_value($row, array('okved2main', 'okved2')),
+        'okvedName' => dnepr_row_value($row, array('okved2mainname', 'okved2name')),
+        'reportingYear' => dnepr_row_value($row, array('yearcode')),
         'boUrl' => isset($row['bourl']) ? dnepr_safe_official_url($row['bourl'], array('bo.nalog.gov.ru')) : null
     );
     if (count($companies) >= 5) {
@@ -281,7 +306,8 @@ $payload = array(
     'ok' => true,
     'found' => count($companies) > 0,
     'query' => $query,
-    'total' => isset($result['ul']['rowCount']) ? (int) $result['ul']['rowCount'] : count($companies),
+    'total' => (isset($result['ul']['rowCount']) ? (int) $result['ul']['rowCount'] : count($legalRows))
+        + (isset($result['ip']['rowCount']) ? (int) $result['ip']['rowCount'] : count($entrepreneurRows)),
     'companies' => $companies,
     'source' => array(
         'name' => 'ФНС России · Прозрачный бизнес',
@@ -289,7 +315,7 @@ $payload = array(
         'retrievedAt' => gmdate('c'),
         'cached' => false
     ),
-    'disclaimer' => 'Ответ получен из официального открытого сервиса ФНС. Для юридически значимого решения сформируйте подписанную выписку ЕГРЮЛ.'
+    'disclaimer' => 'Ответ получен из официального открытого сервиса ФНС. Для юридически значимого решения сформируйте подписанную выписку ЕГРЮЛ или ЕГРИП.'
 );
 dnepr_cache_write($query, $payload);
 dnepr_respond(200, $payload);

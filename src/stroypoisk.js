@@ -256,9 +256,10 @@ function renderCompanyData(payload) {
     return;
   }
   const retrievedAt = payload.source?.retrievedAt || new Date().toISOString();
+  const extractLabel = company.entityType === 'entrepreneur' ? 'Подписанная выписка ЕГРИП' : 'Подписанная выписка ЕГРЮЛ';
   const officialLinks = [
     company.boUrl ? `<a href="${escapeHtml(company.boUrl)}" target="_blank" rel="noopener noreferrer">Бухгалтерская отчётность <span>↗</span></a>` : '',
-    '<a href="https://egrul.nalog.ru/" target="_blank" rel="noopener noreferrer">Подписанная выписка ЕГРЮЛ <span>↗</span></a>',
+    `<a href="https://egrul.nalog.ru/" target="_blank" rel="noopener noreferrer">${extractLabel} <span>↗</span></a>`,
   ].filter(Boolean).join('');
   const extraCount = Math.max(0, Number(payload.total || 0) - 1);
   ui.companyProfile.hidden = false;
@@ -300,18 +301,19 @@ async function fetchCompanyProfile(force = false) {
     renderCompanyLoading();
   }
   if (companyRequestController) companyRequestController.abort();
-  companyRequestController = new AbortController();
-  const timeout = setTimeout(() => companyRequestController.abort(), 16000);
+  const controller = new AbortController();
+  companyRequestController = controller;
+  const timeout = setTimeout(() => controller.abort(), 16000);
   try {
     const response = await fetch('/api/fns-company.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query: active.query }),
-      signal: companyRequestController.signal,
+      signal: controller.signal,
       credentials: 'same-origin',
     });
     const payload = await response.json().catch(() => null);
-    if (!active || active.id !== requestId) return;
+    if (!active || active.id !== requestId || companyRequestController !== controller) return;
     if (!response.ok || !payload?.ok) {
       const message = payload?.message || 'Официальный источник временно не ответил.';
       markFnsSource('unavailable', `Автопроверка: ${message}`);
@@ -330,14 +332,14 @@ async function fetchCompanyProfile(force = false) {
     persist();
     renderCompanyData(payload);
   } catch (error) {
-    if (!active || active.id !== requestId) return;
+    if (!active || active.id !== requestId || companyRequestController !== controller) return;
     const aborted = error?.name === 'AbortError';
     const message = aborted ? 'Время ожидания ответа истекло. Повторите запрос.' : 'Не удалось получить ответ ФНС. Повторите проверку.';
     markFnsSource('unavailable', `Автопроверка: ${message}`);
     renderCompanyMessage('error', 'ФНС временно не ответила', message, true);
   } finally {
     clearTimeout(timeout);
-    if (active?.id === requestId) companyRequestController = null;
+    if (companyRequestController === controller) companyRequestController = null;
   }
 }
 
