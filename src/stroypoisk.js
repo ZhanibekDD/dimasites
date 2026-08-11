@@ -59,14 +59,14 @@ const sources = {
     host: 'egrz.ru',
     url: 'https://egrz.ru/',
     purpose: 'Заключения экспертизы, объект, исполнители и результат экспертизы.',
-    instruction: 'Вставьте номер, адрес, компанию или название объекта в поиск по реестру.',
+    instruction: 'Стройпоиск сам отправляет запрос в публичный реестр и показывает найденные заключения и выгрузки.',
   },
   eis: {
     name: 'ЕИС в сфере закупок',
     host: 'zakupki.gov.ru',
     url: 'https://zakupki.gov.ru/epz/order/extendedsearch/results.html',
     purpose: 'Извещения, закупки, заказчики, документы и история процедур.',
-    instruction: 'Вставьте номер или текст запроса в строку поиска ЕИС.',
+    instruction: 'Стройпоиск сам запрашивает публичный поиск ЕИС и показывает карточки и страницы документов.',
   },
   nspd: {
     name: 'НСПД · Национальная система пространственных данных',
@@ -117,6 +117,7 @@ const ui = {
 
 let active = null;
 let companyRequestController = null;
+const sourceRequestControllers = new Map();
 
 function cleanQuery(value) {
   return value.trim().replace(/\s+/g, ' ').slice(0, 240);
@@ -222,6 +223,19 @@ function markFnsSource(status, note, checkedAt = new Date().toISOString()) {
   updateLead();
 }
 
+function markSource(sourceId, status, note, checkedAt = new Date().toISOString(), response = null) {
+  if (!active) return;
+  const record = active.sources.find((item) => item.id === sourceId);
+  if (!record) return;
+  record.status = status;
+  record.note = String(note || '').slice(0, 500);
+  record.checkedAt = checkedAt;
+  if (response) record.response = response;
+  persist();
+  renderRoutes();
+  updateLead();
+}
+
 function renderCompanyLoading() {
   if (!ui.companyProfile || !ui.companyProfileBody) return;
   ui.companyProfile.hidden = false;
@@ -248,18 +262,22 @@ function renderCompanyMessage(state, title, message, retry = false) {
   ui.companyProfileBody.querySelector('[data-company-retry]')?.addEventListener('click', () => fetchCompanyProfile(true));
 }
 
-const fnsOfficialHosts = new Set([
+const officialHosts = new Set([
   'pb.nalog.ru',
   'egrul.nalog.ru',
   'rmsp.nalog.ru',
   'bo.nalog.gov.ru',
   'service.nalog.ru',
+  'egrz.ru',
+  'www.egrz.ru',
+  'zakupki.gov.ru',
+  'www.zakupki.gov.ru',
 ]);
 
 function safeOfficialHref(value) {
   try {
     const url = new URL(String(value || ''));
-    return url.protocol === 'https:' && fnsOfficialHosts.has(url.hostname.toLowerCase()) ? url.href : '';
+    return url.protocol === 'https:' && officialHosts.has(url.hostname.toLowerCase()) ? url.href : '';
   } catch (_) {
     return '';
   }
@@ -328,6 +346,20 @@ function renderCompanyRecord(company, index, count, payload) {
   </article>`;
 }
 
+function renderFnsSections(payload) {
+  const sections = Array.isArray(payload.responseSections) ? payload.responseSections : [];
+  if (!sections.length) return '';
+  const cards = sections.map((section) => {
+    const records = Array.isArray(section.records) ? section.records : [];
+    const recordHtml = records.map((record, recordIndex) => {
+      const fields = Object.entries(record || {}).map(([key, value]) => `<div><dt>${escapeHtml(key)}</dt><dd>${escapeHtml(describeOfficialField(key, value))}</dd></div>`).join('');
+      return fields ? `<details><summary>Запись ${recordIndex + 1}</summary><dl>${fields}</dl></details>` : '';
+    }).join('');
+    return `<article class="fns-response-section" data-has-records="${records.length ? 'true' : 'false'}"><div><small>${escapeHtml(section.id || '')}</small><strong>${escapeHtml(section.label || 'Раздел ответа')}</strong><span>${escapeHtml(section.rowCount ?? 0)}</span></div><p>Получено в ответе: ${escapeHtml(section.returned ?? records.length)}${section.hasMore ? ' · есть следующая страница' : ''}</p>${recordHtml}</article>`;
+  }).join('');
+  return `<section class="fns-response-sections" aria-label="Все разделы ответа ФНС"><header><span>РАЗДЕЛЫ ОТВЕТА ФНС</span><strong>${sections.length}</strong><p>Показаны счётчики и безопасные поля всех разделов ответа. Служебные токены сессии скрыты.</p></header><div>${cards}</div></section>`;
+}
+
 function renderCompanyData(payload) {
   if (!ui.companyProfile || !ui.companyProfileBody || !active) return;
   const companies = Array.isArray(payload.companies) ? payload.companies : [];
@@ -346,6 +378,7 @@ function renderCompanyData(payload) {
       <dl><div><dt>Юридические лица</dt><dd>${legalCount}</dd></div><div><dt>Индивидуальные предприниматели</dt><dd>${entrepreneurCount}</dd></div><div><dt>Источник</dt><dd>pb.nalog.ru</dd></div></dl>
     </div>
     <div class="company-results">${companies.map((company, index) => renderCompanyRecord(company, index, companies.length, payload)).join('')}</div>
+    ${renderFnsSections(payload)}
     <p class="company-disclaimer">${escapeHtml(payload.disclaimer || 'Для юридически значимого решения сформируйте актуальную выписку ЕГРЮЛ или ЕГРИП.')}</p>`;
 }
 
@@ -364,7 +397,7 @@ async function fetchCompanyProfile(force = false) {
   if (companyRequestController) companyRequestController.abort();
   const controller = new AbortController();
   companyRequestController = controller;
-  const timeout = setTimeout(() => controller.abort(), 16000);
+  const timeout = setTimeout(() => controller.abort(), 32000);
   try {
     const response = await fetch('/api/fns-company.php', {
       method: 'POST',
@@ -377,8 +410,9 @@ async function fetchCompanyProfile(force = false) {
     if (!active || active.id !== requestId || companyRequestController !== controller) return;
     if (!response.ok || !payload?.ok) {
       const message = payload?.message || 'Официальный источник временно не ответил.';
-      markFnsSource('unavailable', `Автопроверка: ${message}`);
-      renderCompanyMessage('error', payload?.code === 'captcha_required' ? 'ФНС запросила ручную проверку' : 'ФНС временно недоступна', message, true);
+      const diagnostic = payload?.diagnosticId ? ` Код диагностики: ${payload.diagnosticId}.` : '';
+      markFnsSource('unavailable', `Автопроверка: ${message}${diagnostic}`);
+      renderCompanyMessage('error', payload?.code === 'captcha_required' ? 'ФНС запросила ручную проверку' : 'ФНС временно недоступна', `${message}${diagnostic}`, true);
       return;
     }
     active.companyProfile = payload;
@@ -404,6 +438,77 @@ async function fetchCompanyProfile(force = false) {
   }
 }
 
+function sourceResponseHtml(record) {
+  if (record.loading) {
+    return '<div class="source-live-result" data-state="loading"><span class="source-spinner"></span><div><strong>Запрос отправлен</strong><p>Ждём ответ официального источника…</p></div></div>';
+  }
+  const payload = record.response;
+  if (!payload) return '';
+  if (payload.ok === false) {
+    return `<div class="source-live-result" data-state="error"><b>!</b><div><strong>Источник не ответил</strong><p>${escapeHtml(payload.message || 'Временная ошибка официального источника.')}</p>${payload.diagnosticId ? `<small>Диагностика: ${escapeHtml(payload.diagnosticId)}</small>` : ''}</div></div>`;
+  }
+  const results = Array.isArray(payload.results) ? payload.results : [];
+  const sharedFiles = Array.isArray(payload.files) ? payload.files : [];
+  const cards = results.map((item) => {
+    const href = safeOfficialHref(item.url);
+    const documents = Array.isArray(item.documents) ? item.documents : [];
+    const documentLinks = documents.map((document) => {
+      const documentHref = safeOfficialHref(document.url);
+      return documentHref ? `<a href="${escapeHtml(documentHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.label || 'Документы')} <span>↗</span></a>` : '';
+    }).filter(Boolean).join('');
+    const facts = [item.status, item.customer, item.publishedAt, item.price].filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join('');
+    return `<article class="source-record"><div><small>${escapeHtml(item.number || item.id || 'ОФИЦИАЛЬНАЯ ЗАПИСЬ')}</small><h4>${escapeHtml(item.title || 'Найдена запись')}</h4>${facts ? `<p class="source-record-facts">${facts}</p>` : ''}<p>${escapeHtml(item.summary || '')}</p></div><footer>${href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Открыть карточку <span>↗</span></a>` : ''}${documentLinks}</footer></article>`;
+  }).join('');
+  const fileLinks = sharedFiles.map((file) => {
+    const href = safeOfficialHref(file.url);
+    return href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.label || 'Выгрузка реестра')} <span>↓</span></a>` : '';
+  }).filter(Boolean).join('');
+  const checkedAt = payload.source?.retrievedAt ? new Date(payload.source.retrievedAt).toLocaleString('ru-RU') : new Date().toLocaleString('ru-RU');
+  return `<div class="source-live-result" data-state="${results.length ? 'found' : 'missing'}"><div class="source-result-head"><div><span>ОТВЕТ ОФИЦИАЛЬНОГО ИСТОЧНИКА</span><strong>${results.length}</strong></div><p>${results.length ? `Показаны все ${results.length} записей текущего ответа.` : 'В текущем ответе записей нет. Это не доказывает отсутствие документа.'}</p><time>${escapeHtml(checkedAt)}</time></div>${cards ? `<div class="source-records">${cards}</div>` : ''}${fileLinks ? `<div class="source-files"><span>ФАЙЛЫ И ВЫГРУЗКИ</span>${fileLinks}</div>` : ''}<small class="source-diagnostic">${payload.diagnosticId ? `Диагностика: ${escapeHtml(payload.diagnosticId)} · ` : ''}${escapeHtml(payload.disclaimer || '')}</small></div>`;
+}
+
+async function fetchRegistrySource(sourceId, force = false) {
+  if (!active || !['egrz', 'eis'].includes(sourceId)) return;
+  const record = active.sources.find((item) => item.id === sourceId);
+  if (!record) return;
+  if (!force && record.response?.ok) return;
+  const requestId = active.id;
+  sourceRequestControllers.get(sourceId)?.abort();
+  const controller = new AbortController();
+  sourceRequestControllers.set(sourceId, controller);
+  record.loading = true;
+  renderRoutes();
+  const timeout = setTimeout(() => controller.abort(), 32000);
+  try {
+    const response = await fetch('/api/source-search.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ source: sourceId, query: active.query }),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!active || active.id !== requestId || sourceRequestControllers.get(sourceId) !== controller) return;
+    record.loading = false;
+    if (!response.ok || !payload?.ok) {
+      const message = payload?.message || 'Официальный источник временно не ответил.';
+      const diagnostic = payload?.diagnosticId ? ` Код: ${payload.diagnosticId}.` : '';
+      markSource(sourceId, 'unavailable', `${message}${diagnostic}`, new Date().toISOString(), { ok: false, message, diagnosticId: payload?.diagnosticId || '' });
+      return;
+    }
+    const count = Array.isArray(payload.results) ? payload.results.length : 0;
+    markSource(sourceId, payload.found ? 'found' : 'missing', payload.found ? `Автопроверка: найдено записей ${count}.` : 'Автопроверка: в текущем ответе записей нет.', payload.source?.retrievedAt, payload);
+  } catch (error) {
+    if (!active || active.id !== requestId || sourceRequestControllers.get(sourceId) !== controller) return;
+    record.loading = false;
+    const message = error?.name === 'AbortError' ? 'Время ожидания ответа истекло.' : 'Не удалось выполнить серверный запрос.';
+    markSource(sourceId, 'unavailable', message, new Date().toISOString(), { ok: false, message });
+  } finally {
+    clearTimeout(timeout);
+    if (sourceRequestControllers.get(sourceId) === controller) sourceRequestControllers.delete(sourceId);
+  }
+}
+
 async function copyQuery() {
   if (!active) return;
   try {
@@ -426,6 +531,7 @@ function renderRoutes() {
   active.sources.forEach((record, index) => {
     const source = sources[record.id];
     const isAutomaticFns = record.id === 'fns-profile' && active.type === 'company';
+    const isAutomaticRegistry = ['egrz', 'eis'].includes(record.id);
     const article = document.createElement('article');
     article.className = 'source-route';
     article.dataset.status = record.status;
@@ -437,6 +543,8 @@ function renderRoutes() {
       <div class="route-actions">
         ${isAutomaticFns
           ? '<button type="button" class="route-auto-check" data-company-route-check>Повторить автопроверку <span>↻</span></button>'
+          : isAutomaticRegistry
+            ? `<button type="button" class="route-auto-check" data-registry-route-check="${escapeHtml(record.id)}">${record.loading ? 'Проверяем…' : 'Повторить автопроверку'} <span>↻</span></button>`
           : `<a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer" data-open-source>Скопировать запрос и открыть <span>↗</span></a>`}
         <label><span>Результат проверки</span><select data-source-status>
           <option value="unchecked">Не проверено</option>
@@ -445,6 +553,7 @@ function renderRoutes() {
           <option value="unavailable">Источник недоступен</option>
         </select></label>
       </div>
+      ${sourceResponseHtml(record)}
       <label class="route-note"><span>Идентификатор, ссылка или заметка</span><input data-source-note maxlength="300" placeholder="Например: номер записи или что нужно уточнить"></label>
       <div class="route-proof"><span data-proof-status>${escapeHtml(statusLabel(record.status))}</span><time>${new Date(record.checkedAt || active.createdAt).toLocaleString('ru-RU')}</time></div>`;
     const select = article.querySelector('[data-source-status]');
@@ -453,6 +562,7 @@ function renderRoutes() {
     note.value = record.note || '';
     article.querySelector('[data-open-source]')?.addEventListener('click', copyQuery);
     article.querySelector('[data-company-route-check]')?.addEventListener('click', () => fetchCompanyProfile(true));
+    article.querySelector('[data-registry-route-check]')?.addEventListener('click', () => fetchRegistrySource(record.id, true));
     select.addEventListener('change', () => {
       record.status = select.value;
       record.checkedAt = new Date().toISOString();
@@ -527,6 +637,7 @@ function renderResult() {
     ui.companyProfile.hidden = true;
     ui.companyProfileBody?.replaceChildren();
   }
+  active.sources.filter((record) => ['egrz', 'eis'].includes(record.id)).forEach((record) => fetchRegistrySource(record.id, false));
   ui.result.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
 }
 
@@ -553,7 +664,7 @@ function runSearch(value, forcedType = 'auto') {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     companyProfile: null,
-    sources: types[selectedType].sources.map((id) => ({ id, status: 'unchecked', note: '', checkedAt: null })),
+    sources: types[selectedType].sources.map((id) => ({ id, status: 'unchecked', note: '', checkedAt: null, response: null, loading: false })),
   };
   persist();
   renderResult();
@@ -639,6 +750,9 @@ function passportData() {
       status: record.status,
       statusLabel: statusLabel(record.status),
       note: record.note || '',
+      results: Array.isArray(record.response?.results) ? record.response.results : [],
+      files: Array.isArray(record.response?.files) ? record.response.files : [],
+      diagnosticId: record.response?.diagnosticId || '',
       confidence: record.status === 'found' ? 'A — только после сверки записи' : null,
     })),
     disclaimer: 'Статусы заполнены пользователем. «Не найдено в источнике» не означает, что документа или факта не существует.',
@@ -683,6 +797,8 @@ ui.exportHtml?.addEventListener('click', exportHtml);
 ui.reset.forEach((button) => button.addEventListener('click', () => {
   if (companyRequestController) companyRequestController.abort();
   companyRequestController = null;
+  sourceRequestControllers.forEach((controller) => controller.abort());
+  sourceRequestControllers.clear();
   active = null;
   ui.result.hidden = true;
   if (ui.companyProfile) ui.companyProfile.hidden = true;

@@ -61,7 +61,10 @@ required = [
     ROOT / "contact.php",
     ROOT / "admin" / "index.php",
     ROOT / "assets" / "css" / "admin.css",
+    ROOT / "assets" / "css" / "admin-sources.css",
     ROOT / "api" / "fns-company.php",
+    ROOT / "api" / "source-common.php",
+    ROOT / "api" / "source-search.php",
     ROOT / "proverka" / "index.html",
     ROOT / "proverka" / "poisk" / "index.html",
     ROOT / "proverka" / "navigator" / "index.html",
@@ -93,7 +96,7 @@ if "+7 (3496) 43-57-67" in contact_gateway:
     errors.append("contact.php: obsolete fallback phone remains")
 
 admin_gateway = (ROOT / "admin" / "index.php").read_text(encoding="utf-8")
-for marker in ("secure_equals_legacy", "load_admin_config", ".access.php", "admin.json", "dnepr-private", "lead-status-", "format'] === 'csv'", "noindex"):
+for marker in ("secure_equals_legacy", "load_admin_config", ".access.php", "admin.json", "dnepr-private", "lead-status-", "source-query-", "format'] === 'sources'", "format'] === 'csv'", "noindex"):
     if marker not in admin_gateway:
         errors.append(f"admin/index.php: missing protected lead console marker {marker}")
 
@@ -115,9 +118,14 @@ for marker in ("navigator_route_created", "officialSources", "downloadReport", "
 search_source = (ROOT.parent / "src" / "stroypoisk.js").read_text(encoding="utf-8")
 if "sources: ['fns-profile', 'egrz', 'eis']" not in search_source:
     errors.append("stroypoisk.js: company route must contain one FNS source without duplicate extract card")
-for marker in ("Все поля ответа ФНС", "company-documents", "safeOfficialHref"):
+for marker in ("Все поля ответа ФНС", "company-documents", "safeOfficialHref", "fetchRegistrySource", "sourceResponseHtml"):
     if marker not in search_source:
         errors.append(f"stroypoisk.js: missing full FNS result UI marker {marker}")
+
+registry_gateway = (ROOT / "api" / "source-search.php").read_text(encoding="utf-8")
+for marker in ("source_parse_eis", "source_parse_egrz", "dnepr_source_http_post", "official-documents-page", "diagnosticId"):
+    if marker not in registry_gateway:
+        errors.append(f"source-search.php: missing official registry adapter marker {marker}")
 
 about_html = (ROOT / "about" / "index.html").read_text(encoding="utf-8")
 projects_html = (ROOT / "projects" / "index.html").read_text(encoding="utf-8")

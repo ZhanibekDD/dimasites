@@ -169,6 +169,15 @@ function state_label($state)
     return 'Новый';
 }
 
+function admin_safe_official_url($value)
+{
+    $parts = @parse_url((string)$value);
+    if (!is_array($parts) || !isset($parts['scheme']) || !isset($parts['host'])) { return ''; }
+    $hosts = array('pb.nalog.ru', 'egrul.nalog.ru', 'rmsp.nalog.ru', 'bo.nalog.gov.ru', 'service.nalog.ru', 'egrz.ru', 'www.egrz.ru', 'zakupki.gov.ru', 'www.zakupki.gov.ru');
+    if (strtolower($parts['scheme']) !== 'https' || !in_array(strtolower($parts['host']), $hosts, true)) { return ''; }
+    return (string)$value;
+}
+
 function lead_due($lead, $state)
 {
     if ($state !== 'new') { return array('done', state_label($state)); }
@@ -225,6 +234,9 @@ $leads = ledger_lines($privateDirectory . '/leads-*.jsonl');
 usort($leads, 'lead_sort');
 if (count($leads) > 5000) { $leads = array_slice($leads, 0, 5000); }
 $statusRecords = ledger_lines($privateDirectory . '/lead-status-*.jsonl');
+$sourceQueries = ledger_lines($privateDirectory . '/source-query-*.jsonl');
+usort($sourceQueries, 'lead_sort');
+if (count($sourceQueries) > 1000) { $sourceQueries = array_slice($sourceQueries, 0, 1000); }
 $states = array();
 $stateTimes = array();
 foreach ($statusRecords as $statusRecord) {
@@ -239,6 +251,7 @@ foreach ($statusRecords as $statusRecord) {
 }
 
 $stats = array('all' => count($leads), 'new' => 0, 'hot' => 0, 'warm' => 0, 'today' => 0);
+$sourceStats = array('all' => count($sourceQueries), 'found' => 0, 'unavailable' => 0, 'today' => 0);
 $today = date('Y-m-d');
 foreach ($leads as $lead) {
     $id = isset($lead['id']) ? $lead['id'] : '';
@@ -249,6 +262,35 @@ foreach ($leads as $lead) {
         if (isset($lead['priority']) && $lead['priority'] === 'warm') { $stats['warm']++; }
     }
     if (isset($lead['created_at']) && substr($lead['created_at'], 0, 10) === $today) { $stats['today']++; }
+}
+foreach ($sourceQueries as $sourceQuery) {
+    if (isset($sourceQuery['state']) && $sourceQuery['state'] === 'found') { $sourceStats['found']++; }
+    if (isset($sourceQuery['state']) && $sourceQuery['state'] === 'unavailable') { $sourceStats['unavailable']++; }
+    if (isset($sourceQuery['created_at']) && substr($sourceQuery['created_at'], 0, 10) === $today) { $sourceStats['today']++; }
+}
+
+if (isset($_GET['format']) && $_GET['format'] === 'sources') {
+    header('Content-Type: text/csv; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="dnepr-source-queries-' . date('Y-m-d') . '.csv"');
+    echo "\xEF\xBB\xBF";
+    $output = fopen('php://output', 'w');
+    fputcsv($output, array('Дата', 'Источник', 'Запрос', 'Статус', 'Результатов', 'HTTP', 'Время, мс', 'Код диагностики', 'Код ошибки', 'Сообщение'), ';');
+    foreach ($sourceQueries as $sourceQuery) {
+        fputcsv($output, array(
+            isset($sourceQuery['created_at']) ? $sourceQuery['created_at'] : '',
+            isset($sourceQuery['source']) ? strtoupper($sourceQuery['source']) : '',
+            isset($sourceQuery['query']) ? $sourceQuery['query'] : '',
+            isset($sourceQuery['state']) ? $sourceQuery['state'] : '',
+            isset($sourceQuery['result_count']) ? $sourceQuery['result_count'] : '',
+            isset($sourceQuery['http_status']) ? $sourceQuery['http_status'] : '',
+            isset($sourceQuery['latency_ms']) ? $sourceQuery['latency_ms'] : '',
+            isset($sourceQuery['diagnostic_id']) ? $sourceQuery['diagnostic_id'] : '',
+            isset($sourceQuery['error_code']) ? $sourceQuery['error_code'] : '',
+            isset($sourceQuery['message']) ? $sourceQuery['message'] : ''
+        ), ';');
+    }
+    fclose($output);
+    exit;
 }
 
 if (isset($_GET['format']) && $_GET['format'] === 'csv') {
@@ -288,10 +330,11 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
   <meta name="robots" content="noindex, nofollow, noarchive">
   <title>Lead Engine — ДНЕПР</title>
   <link rel="icon" href="/assets/images/logo-v2.svg?v=20260811-snow2" type="image/svg+xml">
-  <link rel="stylesheet" href="/assets/css/admin.css?v=20260811-admin1">
+  <link rel="stylesheet" href="/assets/css/admin.css?v=20260811-sources1">
+  <link rel="stylesheet" href="/assets/css/admin-sources.css?v=20260811-sources1">
 </head>
 <body>
-  <header class="admin-header"><a href="/" target="_blank" rel="noopener"><img src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="44" height="44"><span><b>ДНЕПР</b><small>LEAD ENGINE</small></span></a><div><span>обновлено <?php echo h(date('d.m.Y H:i')); ?></span><a href="?format=csv">Скачать CSV ↘</a></div></header>
+  <header class="admin-header"><a href="/" target="_blank" rel="noopener"><img src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="44" height="44"><span><b>ДНЕПР</b><small>LEAD ENGINE</small></span></a><div><span>обновлено <?php echo h(date('d.m.Y H:i')); ?></span><a href="?format=sources">Запросы CSV ↘</a><a href="?format=csv">Заявки CSV ↘</a></div></header>
   <main>
     <section class="admin-hero"><div><span>ПРОДАЖИ / ОЧЕРЕДЬ</span><h1>Обращения с сайта</h1><p>Заявки сохраняются на сервере даже при временном сбое почты. Горячие обращения требуют реакции в течение 15 минут.</p></div><div class="admin-orbit"><strong><?php echo h($stats['new']); ?></strong><span>новых</span></div></section>
     <section class="stats" aria-label="Сводка"><article><span>Сегодня</span><strong><?php echo h($stats['today']); ?></strong></article><article class="hot"><span>Горячих новых</span><strong><?php echo h($stats['hot']); ?></strong></article><article><span>Приоритетных</span><strong><?php echo h($stats['warm']); ?></strong></article><article><span>Всего в журнале</span><strong><?php echo h($stats['all']); ?></strong></article></section>
@@ -313,6 +356,37 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
             <div class="lead-top"><div><span class="priority"><?php echo h(priority_label($priority)); ?></span><b><?php echo h($id); ?></b><time><?php echo $created ? h(date('d.m.Y H:i', $created)) : '—'; ?></time></div><div><strong><?php echo h(isset($lead['score']) ? $lead['score'] : 0); ?><small>/100</small></strong><span class="due <?php echo h($due[0]); ?>"><?php echo h($due[1]); ?></span></div></div>
             <div class="lead-grid"><dl><div><dt>Контакт</dt><dd><?php echo h(isset($lead['name']) ? $lead['name'] : '—'); ?></dd></div><div><dt>Телефон</dt><dd><a href="tel:<?php echo h(isset($lead['phone']) ? $lead['phone'] : ''); ?>"><?php echo h(isset($lead['phone']) ? $lead['phone'] : '—'); ?></a></dd></div><div><dt>Компания</dt><dd><?php echo h(!empty($lead['company']) ? $lead['company'] : 'не указана'); ?></dd></div><div><dt>E-mail</dt><dd><?php if (!empty($lead['email'])): ?><a href="mailto:<?php echo h($lead['email']); ?>"><?php echo h($lead['email']); ?></a><?php else: ?>не указан<?php endif; ?></dd></div><div><dt>Источник</dt><dd><?php echo h(!empty($lead['source']) ? $lead['source'] : 'Форма сайта'); ?></dd></div><div><dt>UTM</dt><dd><?php echo h(trim((isset($lead['utm_source']) ? $lead['utm_source'] : '') . ' / ' . (isset($lead['utm_campaign']) ? $lead['utm_campaign'] : ''), ' /')); ?></dd></div></dl><div class="lead-message"><span>Задача</span><p><?php echo nl2br(h(isset($lead['message']) ? $lead['message'] : '—')); ?></p></div></div>
             <footer><span>Статус: <b><?php echo h(state_label($state)); ?></b></span><div><?php if ($state !== 'new'): ?><form method="post"><input type="hidden" name="csrf" value="<?php echo h($_SESSION['csrf']); ?>"><input type="hidden" name="lead_id" value="<?php echo h($id); ?>"><input type="hidden" name="state" value="new"><button type="submit">Вернуть в новые</button></form><?php endif; ?><?php if ($state !== 'contacted'): ?><form method="post"><input type="hidden" name="csrf" value="<?php echo h($_SESSION['csrf']); ?>"><input type="hidden" name="lead_id" value="<?php echo h($id); ?>"><input type="hidden" name="state" value="contacted"><button type="submit">Отметить контакт</button></form><?php endif; ?><?php if ($state !== 'closed'): ?><form method="post"><input type="hidden" name="csrf" value="<?php echo h($_SESSION['csrf']); ?>"><input type="hidden" name="lead_id" value="<?php echo h($id); ?>"><input type="hidden" name="state" value="closed"><button class="close" type="submit">Закрыть</button></form><?php endif; ?></div></footer>
+          </article>
+        <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </section>
+
+    <section class="source-journal">
+      <header><div><span>СТРОЙПОИСК / АУДИТ</span><h2>Запросы к реестрам</h2></div><p>Здесь видны реальные попытки ФНС, ГИС ЕГРЗ и ЕИС: результат, задержка, HTTP-код и идентификатор диагностики.</p></header>
+      <div class="source-stats"><article><span>Сегодня</span><strong><?php echo h($sourceStats['today']); ?></strong></article><article><span>Найдено</span><strong><?php echo h($sourceStats['found']); ?></strong></article><article class="source-error"><span>Ошибок источника</span><strong><?php echo h($sourceStats['unavailable']); ?></strong></article><article><span>Всего запросов</span><strong><?php echo h($sourceStats['all']); ?></strong></article></div>
+      <?php if (!$sourceQueries): ?>
+        <div class="empty"><strong>Проверок пока нет</strong><p>Выполните поиск на странице «Стройпоиск» — запрос появится здесь после ответа сервера.</p></div>
+      <?php else: ?>
+        <div class="source-query-list">
+        <?php foreach ($sourceQueries as $sourceQuery):
+          $sourceState = isset($sourceQuery['state']) ? $sourceQuery['state'] : 'unavailable';
+          $sourceCreated = isset($sourceQuery['created_at']) ? strtotime($sourceQuery['created_at']) : 0;
+        ?>
+          <article class="source-query source-state-<?php echo h($sourceState); ?>">
+            <div><span><?php echo h(isset($sourceQuery['source']) ? strtoupper($sourceQuery['source']) : 'SOURCE'); ?></span><strong><?php echo h(isset($sourceQuery['query']) ? $sourceQuery['query'] : '—'); ?></strong><small><?php echo $sourceCreated ? h(date('d.m.Y H:i:s', $sourceCreated)) : '—'; ?></small></div>
+            <dl><div><dt>Статус</dt><dd><?php echo h($sourceState === 'found' ? 'Найдено' : ($sourceState === 'missing' ? 'Нет записей в ответе' : 'Источник недоступен')); ?></dd></div><div><dt>Результатов</dt><dd><?php echo h(isset($sourceQuery['result_count']) ? $sourceQuery['result_count'] : 0); ?></dd></div><div><dt>HTTP / время</dt><dd><?php echo h(isset($sourceQuery['http_status']) ? $sourceQuery['http_status'] : 0); ?> · <?php echo h(isset($sourceQuery['latency_ms']) ? $sourceQuery['latency_ms'] : 0); ?> мс</dd></div><div><dt>Диагностика</dt><dd><?php echo h(isset($sourceQuery['diagnostic_id']) ? $sourceQuery['diagnostic_id'] : '—'); ?></dd></div></dl>
+            <?php if (!empty($sourceQuery['message']) || !empty($sourceQuery['error_code'])): ?><p><?php echo h(trim((isset($sourceQuery['error_code']) ? $sourceQuery['error_code'] : '') . ' · ' . (isset($sourceQuery['message']) ? $sourceQuery['message'] : ''), ' ·')); ?></p><?php endif; ?>
+            <?php if (!empty($sourceQuery['results']) && is_array($sourceQuery['results'])): ?>
+              <div class="source-query-results"><span>ЗАПИСИ ИЗ ОТВЕТА</span><?php foreach ($sourceQuery['results'] as $sourceResult):
+                $resultName = isset($sourceResult['shortName']) ? $sourceResult['shortName'] : (isset($sourceResult['title']) ? $sourceResult['title'] : 'Официальная запись');
+                $resultId = isset($sourceResult['inn']) ? 'ИНН ' . $sourceResult['inn'] : (isset($sourceResult['number']) ? '№ ' . $sourceResult['number'] : (isset($sourceResult['id']) ? $sourceResult['id'] : ''));
+                $resultUrl = isset($sourceResult['url']) ? admin_safe_official_url($sourceResult['url']) : '';
+              ?><article><div><strong><?php echo h($resultName); ?></strong><small><?php echo h($resultId); ?></small></div><?php if ($resultUrl !== ''): ?><a href="<?php echo h($resultUrl); ?>" target="_blank" rel="noopener noreferrer">Карточка ↗</a><?php endif; ?></article>
+              <?php if (!empty($sourceResult['documents']) && is_array($sourceResult['documents'])): ?><div class="source-query-files"><?php foreach ($sourceResult['documents'] as $sourceDocument): $documentUrl = isset($sourceDocument['url']) ? admin_safe_official_url($sourceDocument['url']) : ''; if ($documentUrl === '') { continue; } ?><a href="<?php echo h($documentUrl); ?>" target="_blank" rel="noopener noreferrer"><?php echo h(isset($sourceDocument['label']) ? $sourceDocument['label'] : 'Официальный документ'); ?> ↗</a><?php endforeach; ?></div><?php endif; ?>
+              <?php endforeach; ?></div>
+            <?php endif; ?>
+            <?php if (!empty($sourceQuery['files']) && is_array($sourceQuery['files'])): ?><div class="source-query-files source-query-exports"><span>ФАЙЛЫ И ВЫГРУЗКИ</span><?php foreach ($sourceQuery['files'] as $sourceFile): $fileUrl = isset($sourceFile['url']) ? admin_safe_official_url($sourceFile['url']) : ''; if ($fileUrl === '') { continue; } ?><a href="<?php echo h($fileUrl); ?>" target="_blank" rel="noopener noreferrer"><?php echo h(isset($sourceFile['label']) ? $sourceFile['label'] : 'Официальный файл'); ?> ↓</a><?php endforeach; ?></div><?php endif; ?>
           </article>
         <?php endforeach; ?>
         </div>
