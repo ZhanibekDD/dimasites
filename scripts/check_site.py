@@ -62,6 +62,9 @@ required = [
     ROOT / "api" / "fns-company.php",
     ROOT / "proverka" / "index.html",
     ROOT / "proverka" / "poisk" / "index.html",
+    ROOT / "proverka" / "navigator" / "index.html",
+    ROOT / "assets" / "js" / "navigator.js",
+    ROOT / "assets" / "css" / "navigator.css",
     ROOT / "assets" / "js" / "proverka.bundle.js",
     ROOT / "assets" / "js" / "stroypoisk.bundle.js",
     ROOT / "assets" / "vendor" / "pdfjs" / "pdf.min.mjs",
@@ -91,6 +94,11 @@ main_js = (ROOT / "assets" / "js" / "main.js").read_text(encoding="utf-8")
 for marker in ("lead_id", "lead_score", "lead_priority"):
     if marker not in main_js:
         errors.append(f"main.js: missing lead analytics marker {marker}")
+
+navigator_js = (ROOT / "assets" / "js" / "navigator.js").read_text(encoding="utf-8")
+for marker in ("navigator_route_created", "officialSources", "downloadReport", "отсутствие записи"):
+    if marker not in navigator_js:
+        errors.append(f"navigator.js: missing production navigator marker {marker}")
 
 search_source = (ROOT.parent / "src" / "stroypoisk.js").read_text(encoding="utf-8")
 if "sources: ['fns-profile', 'egrz', 'eis']" not in search_source:
