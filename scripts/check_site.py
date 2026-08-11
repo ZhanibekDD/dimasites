@@ -80,6 +80,18 @@ for marker in ("officialFields", "documents", "rsmppdf", "puchdocurl", "gosregur
     if marker not in gateway:
         errors.append(f"fns-company.php: missing full-response marker {marker}")
 
+contact_gateway = (ROOT / "contact.php").read_text(encoding="utf-8")
+for marker in ("calculate_lead_score", "create_lead_id", "store_lead", "lead_score", "dnepr-private"):
+    if marker not in contact_gateway:
+        errors.append(f"contact.php: missing production lead marker {marker}")
+if "+7 (3496) 43-57-67" in contact_gateway:
+    errors.append("contact.php: obsolete fallback phone remains")
+
+main_js = (ROOT / "assets" / "js" / "main.js").read_text(encoding="utf-8")
+for marker in ("lead_id", "lead_score", "lead_priority"):
+    if marker not in main_js:
+        errors.append(f"main.js: missing lead analytics marker {marker}")
+
 search_source = (ROOT.parent / "src" / "stroypoisk.js").read_text(encoding="utf-8")
 if "sources: ['fns-profile', 'egrz', 'eis']" not in search_source:
     errors.append("stroypoisk.js: company route must contain one FNS source without duplicate extract card")
@@ -92,6 +104,13 @@ projects_html = (ROOT / "projects" / "index.html").read_text(encoding="utf-8")
 for page_name, content in (("about/index.html", about_html), ("projects/index.html", projects_html)):
     if "sports-court.svg" in content or "stadium-stands.svg" in content:
         errors.append(f"{page_name}: schematic image remains where a real company photo is required")
+
+for page in ROOT.rglob("*.html"):
+    if page.name == "404.html":
+        continue
+    content = page.read_text(encoding="utf-8")
+    if "/assets/js/main.js?v=20260811-lead1" not in content:
+        errors.append(f"{page.relative_to(ROOT)}: stale main.js cache version")
 
 sitemap = (ROOT / "sitemap.xml").read_text(encoding="utf-8") if (ROOT / "sitemap.xml").exists() else ""
 for rel, canonical in canonical_urls:

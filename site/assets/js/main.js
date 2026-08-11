@@ -230,7 +230,13 @@
         status.textContent = result.message || 'Заявка отправлена. Мы свяжемся с вами.';
         status.classList.add('success');
         window.dataLayer = window.dataLayer || [];
-        window.dataLayer.push({ event: 'generate_lead', form_source: form.querySelector('[name="source"]')?.value || 'Форма сайта' });
+        window.dataLayer.push({
+          event: 'generate_lead',
+          form_source: form.querySelector('[name="source"]')?.value || 'Форма сайта',
+          lead_id: result.lead_id || '',
+          lead_score: Number(result.lead_score || 0),
+          lead_priority: result.priority || 'standard'
+        });
       } catch (error) {
         status.textContent = `${error.message} Позвоните по телефону +7 (3496) 45-30-02.`;
         status.classList.add('error');

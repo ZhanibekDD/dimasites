@@ -2,12 +2,19 @@
 
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: strict-origin-when-cross-origin');
+header('Cache-Control: no-store, max-age=0');
 
-function respond($status, $message)
+function respond($status, $message, $extra)
 {
+    if (!is_array($extra)) { $extra = array(); }
     header('Content-Type: application/json; charset=utf-8', true, (int)$status);
-    echo json_encode(array('message' => $message));
+    echo json_encode(array_merge(array('message' => $message), $extra));
     exit;
+}
+
+function simple_respond($status, $message)
+{
+    respond($status, $message, array());
 }
 
 function request_value($source, $key)
@@ -16,17 +23,17 @@ function request_value($source, $key)
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    respond(405, 'Метод не поддерживается.');
+    simple_respond(405, 'Метод не поддерживается.');
 }
 
 $host = strtolower((string)request_value($_SERVER, 'HTTP_HOST'));
 if ($host !== '' && !preg_match('/(^|\.)stroydnepr\.ru$/', preg_replace('/:\d+$/', '', $host))) {
-    respond(403, 'Запрос отклонён.');
+    simple_respond(403, 'Запрос отклонён.');
 }
 
 $website = trim((string)request_value($_POST, 'website'));
 if ($website !== '') {
-    respond(200, 'Заявка отправлена.');
+    simple_respond(200, 'Заявка отправлена.');
 }
 
 $ip = (string)request_value($_SERVER, 'REMOTE_ADDR');
@@ -34,7 +41,7 @@ if ($ip === '') { $ip = 'unknown'; }
 $rateFile = sys_get_temp_dir() . '/dnepr-form-' . hash('sha256', $ip);
 $lastRequest = is_file($rateFile) ? (int)file_get_contents($rateFile) : 0;
 if ($lastRequest > time() - 30) {
-    respond(429, 'Пожалуйста, подождите перед повторной отправкой.');
+    simple_respond(429, 'Пожалуйста, подождите перед повторной отправкой.');
 }
 @file_put_contents($rateFile, (string)time(), LOCK_EX);
 
@@ -59,18 +66,112 @@ $utmSource = clean((string)request_value($_POST, 'utm_source'), 120);
 $utmCampaign = clean((string)request_value($_POST, 'utm_campaign'), 160);
 
 if ($name === '' || $phone === '' || $message === '' || $consent !== '1') {
-    respond(422, 'Заполните имя, телефон, описание задачи и подтвердите согласие.');
+    simple_respond(422, 'Заполните имя, телефон, описание задачи и подтвердите согласие.');
 }
 if (!preg_match('/^[0-9+()\-\s]{7,30}$/', $phone)) {
-    respond(422, 'Проверьте номер телефона.');
+    simple_respond(422, 'Проверьте номер телефона.');
 }
 if ($emailRaw !== '' && $email === '') {
-    respond(422, 'Проверьте адрес электронной почты.');
+    simple_respond(422, 'Проверьте адрес электронной почты.');
 }
 
+function lead_lower($value)
+{
+    return function_exists('mb_strtolower')
+        ? mb_strtolower((string)$value, 'UTF-8')
+        : strtolower((string)$value);
+}
+
+function lead_has_any($text, $needles)
+{
+    foreach ($needles as $needle) {
+        if (strpos($text, $needle) !== false) { return true; }
+    }
+    return false;
+}
+
+function calculate_lead_score($source, $message, $company, $email)
+{
+    $score = 0;
+    $context = lead_lower($source . "\n" . $message);
+
+    if (lead_has_any($context, array('анализ строительного документа', 'локального анализа', 'замечан'))) { $score += 25; }
+    if (lead_has_any($context, array('стройпоиск', 'фнс', 'инн', 'огрн', 'егрз'))) { $score += 20; }
+    if (lead_has_any($context, array('инженерный экспресс-аудит', 'индекс готовности'))) { $score += 15; }
+    if (lead_has_any($context, array('отказ', 'предписан', 'не соответств', 'устранить', 'доработать'))) { $score += 15; }
+    if (lead_has_any($context, array('срочно', 'до месяца', 'до 90', 'готов к тендеру', 'готов к старту'))) { $score += 15; }
+    if (lead_has_any($context, array('псд', 'техническое задание', 'чертеж', 'ведомость объ', 'проектная документац'))) { $score += 10; }
+    if (lead_has_any($context, array('янао', 'муравленко', 'хмао', 'югра', 'тюмен'))) { $score += 10; }
+    if (lead_has_any($context, array('разрешение', 'экспертиз', 'строительств', 'капитальный ремонт', 'трубопровод'))) { $score += 10; }
+    if ($company !== '') { $score += 5; }
+    if ($email !== '') { $score += 5; }
+
+    return min(100, $score);
+}
+
+function lead_priority($score)
+{
+    if ($score >= 70) { return array('code' => 'hot', 'label' => 'ГОРЯЧИЙ', 'sla' => '15 минут'); }
+    if ($score >= 45) { return array('code' => 'warm', 'label' => 'ПРИОРИТЕТНЫЙ', 'sla' => '60 минут'); }
+    return array('code' => 'standard', 'label' => 'СТАНДАРТНЫЙ', 'sla' => 'рабочий день');
+}
+
+function create_lead_id()
+{
+    if (function_exists('random_bytes')) {
+        $suffix = strtoupper(bin2hex(random_bytes(3)));
+    } else {
+        $suffix = strtoupper(substr(hash('sha256', uniqid('', true) . mt_rand()), 0, 6));
+    }
+    return 'DNEPR-' . date('Ymd') . '-' . $suffix;
+}
+
+function store_lead($record)
+{
+    /* contact.php is deployed in public_html; two dirname calls resolve to the
+       hosting account root. The ledger therefore cannot be downloaded by URL. */
+    $privateDirectory = dirname(dirname(__FILE__)) . '/dnepr-private';
+    if (!is_dir($privateDirectory) && !@mkdir($privateDirectory, 0700, true)) { return false; }
+    @chmod($privateDirectory, 0700);
+    $ledger = $privateDirectory . '/leads-' . date('Y-m') . '.jsonl';
+    $written = @file_put_contents($ledger, json_encode($record) . "\n", FILE_APPEND | LOCK_EX);
+    if ($written === false) { return false; }
+    @chmod($ledger, 0600);
+    return true;
+}
+
+$leadScore = calculate_lead_score($source, $message, $company, $email);
+$priority = lead_priority($leadScore);
+$leadId = create_lead_id();
+$createdAt = date('c');
+
+$leadRecord = array(
+    'id' => $leadId,
+    'created_at' => $createdAt,
+    'score' => $leadScore,
+    'priority' => $priority['code'],
+    'sla' => $priority['sla'],
+    'name' => $name,
+    'phone' => $phone,
+    'company' => $company,
+    'email' => $email,
+    'source' => $source,
+    'page_url' => $pageUrl,
+    'utm_source' => $utmSource,
+    'utm_campaign' => $utmCampaign,
+    'message' => $message,
+    'ip_hash' => hash('sha256', $ip),
+);
+$leadStored = store_lead($leadRecord);
+
 $recipient = 'office@stroydnepr.ru';
-$subject = 'Новая заявка с сайта stroydnepr.ru';
-$body = "Новая заявка с сайта\n\n"
+$subject = '[' . $priority['label'] . ' ' . $leadScore . '] ' . $leadId . ' — ' . ($source !== '' ? $source : 'заявка с сайта');
+$body = "Новая квалифицированная заявка с сайта\n\n"
+    . "ID: {$leadId}\n"
+    . "Приоритет: " . $priority['label'] . "\n"
+    . "Lead Score: {$leadScore}/100\n"
+    . "Рекомендуемый срок реакции: " . $priority['sla'] . "\n"
+    . "Защищённый журнал: " . ($leadStored ? 'сохранено' : 'ошибка записи') . "\n\n"
     . "Имя: {$name}\n"
     . "Телефон: {$phone}\n"
     . "Компания: " . ($company !== '' ? $company : 'не указана') . "\n"
@@ -91,17 +192,18 @@ if ($email !== '') {
 }
 
 if (!mail($recipient, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, implode("\r\n", $headers))) {
-    /* Keep a private fallback outside public_html so a temporary mail outage
-       does not silently destroy a qualified lead. */
-    $fallbackDirectory = dirname(dirname(__FILE__));
-    $fallbackFile = $fallbackDirectory . '/stroydnepr-undelivered-leads.log';
-    $fallbackBody = "\n--- " . date('c') . " ---\n" . $body;
-    $stored = @file_put_contents($fallbackFile, $fallbackBody, FILE_APPEND | LOCK_EX);
-    if ($stored !== false) {
-        @chmod($fallbackFile, 0600);
-        respond(202, 'Заявка принята. Специалист свяжется с вами.');
+    if ($leadStored) {
+        respond(202, 'Заявка сохранена. Номер: ' . $leadId . '. Специалист свяжется с вами.', array(
+            'lead_id' => $leadId,
+            'lead_score' => $leadScore,
+            'priority' => $priority['code'],
+        ));
     }
-    respond(500, 'Сервис отправки временно недоступен. Позвоните нам по телефону +7 (3496) 43-57-67.');
+    simple_respond(500, 'Сервис отправки временно недоступен. Позвоните нам по телефону +7 (3496) 45-30-02.');
 }
 
-respond(200, 'Заявка отправлена. Специалист свяжется с вами.');
+respond(200, 'Заявка отправлена. Номер: ' . $leadId . '. Специалист свяжется с вами.', array(
+    'lead_id' => $leadId,
+    'lead_score' => $leadScore,
+    'priority' => $priority['code'],
+));
