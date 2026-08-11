@@ -1,6 +1,7 @@
 <?php
-/* PHP 5.3-compatible private lead console. Credentials and ledgers live
-   outside public_html and are never committed to Git. */
+/* PHP 5.3-compatible private lead console. The generated access file lives
+   next to this script, blocks direct HTTP access and is excluded from deploys.
+   Lead ledgers remain outside public_html. */
 date_default_timezone_set('Asia/Yekaterinburg');
 header('Content-Type: text/html; charset=UTF-8');
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -82,6 +83,26 @@ function admin_private_directories()
 
 function load_admin_config(&$privateDirectory)
 {
+    /* Timeweb may apply open_basedir differently to CLI and web PHP. Keep the
+       credential bootstrap inside DOCUMENT_ROOT, protected by executable PHP
+       and .htaccess, while all lead data stays in the private directory. */
+    $localFile = dirname(__FILE__) . '/.access.php';
+    if (is_file($localFile) && is_readable($localFile)) {
+        if (!defined('DNEPR_ADMIN_BOOTSTRAP')) {
+            define('DNEPR_ADMIN_BOOTSTRAP', true);
+        }
+        $localConfig = @include $localFile;
+        if (valid_admin_config($localConfig)) {
+            if (isset($localConfig['data_directory']) && $localConfig['data_directory'] !== '') {
+                $privateDirectory = $localConfig['data_directory'];
+            } else {
+                $fallbackDirectories = admin_private_directories();
+                $privateDirectory = $fallbackDirectories[0];
+            }
+            return $localConfig;
+        }
+    }
+
     $directories = admin_private_directories();
     foreach ($directories as $directory) {
         $jsonFile = $directory . '/admin.json';
