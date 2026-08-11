@@ -52,6 +52,63 @@ function deny_auth()
     exit;
 }
 
+function valid_admin_config($config)
+{
+    return is_array($config)
+        && isset($config['username'])
+        && isset($config['salt'])
+        && isset($config['password_hash'])
+        && $config['username'] !== ''
+        && $config['salt'] !== ''
+        && $config['password_hash'] !== '';
+}
+
+function admin_private_directories()
+{
+    $candidates = array();
+    $candidates[] = dirname(dirname(dirname(__FILE__))) . '/dnepr-private';
+    if (isset($_SERVER['DOCUMENT_ROOT']) && $_SERVER['DOCUMENT_ROOT'] !== '') {
+        $candidates[] = dirname(rtrim($_SERVER['DOCUMENT_ROOT'], '/')) . '/dnepr-private';
+    }
+    $environmentHome = getenv('HOME');
+    if ($environmentHome !== false && $environmentHome !== '') {
+        $candidates[] = rtrim($environmentHome, '/') . '/dnepr-private';
+    }
+    if (isset($_SERVER['HOME']) && $_SERVER['HOME'] !== '') {
+        $candidates[] = rtrim($_SERVER['HOME'], '/') . '/dnepr-private';
+    }
+    return array_values(array_unique($candidates));
+}
+
+function load_admin_config(&$privateDirectory)
+{
+    $directories = admin_private_directories();
+    foreach ($directories as $directory) {
+        $jsonFile = $directory . '/admin.json';
+        if (is_file($jsonFile) && is_readable($jsonFile)) {
+            $json = @file_get_contents($jsonFile);
+            $config = $json === false ? false : json_decode($json, true);
+            if (valid_admin_config($config)) {
+                $privateDirectory = $directory;
+                return $config;
+            }
+        }
+
+        /* Backward compatibility for the first setup script. New installs use
+           JSON because some shared-hosting PHP configurations block includes
+           outside DOCUMENT_ROOT. */
+        $legacyFile = $directory . '/admin.php';
+        if (is_file($legacyFile) && is_readable($legacyFile)) {
+            $config = @include $legacyFile;
+            if (valid_admin_config($config)) {
+                $privateDirectory = $directory;
+                return $config;
+            }
+        }
+    }
+    return false;
+}
+
 function ledger_lines($pattern)
 {
     $records = array();
@@ -105,18 +162,12 @@ function lead_due($lead, $state)
     return array('active', 'Осталось ' . max(1, (int)ceil($left / 60)) . ' мин.');
 }
 
-$privateDirectory = dirname(dirname(dirname(__FILE__))) . '/dnepr-private';
-$configFile = $privateDirectory . '/admin.php';
-if (!is_file($configFile)) {
+$privateDirectory = '';
+$config = load_admin_config($privateDirectory);
+if ($config === false) {
     header('HTTP/1.1 503 Service Unavailable');
-    echo '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Консоль не настроена</title><style>body{margin:0;padding:10vw;background:#071119;color:#fff;font:18px/1.6 Arial}code{color:#ffd429}</style></head><body><h1>Закрытая консоль ещё не настроена</h1><p>Выполните через SSH: <code>sh "$HOME/dimasites-deploy/scripts/timeweb_setup_admin.sh"</code></p></body></html>';
+    echo '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Консоль не настроена</title><style>body{margin:0;padding:10vw;background:#071119;color:#fff;font:18px/1.6 Arial}code{color:#ffd429}</style></head><body><h1>Конфигурация доступа не найдена</h1><p>Обновите сайт и повторно выполните через SSH:</p><p><code>sh "$HOME/dimasites-deploy/scripts/timeweb_setup_admin.sh"</code></p></body></html>';
     exit;
-}
-
-$config = include $configFile;
-if (!is_array($config) || !isset($config['username']) || !isset($config['salt']) || !isset($config['password_hash'])) {
-    header('HTTP/1.1 503 Service Unavailable');
-    exit('Некорректная конфигурация доступа.');
 }
 list($authUser, $authPassword) = basic_credentials();
 $providedHash = hash('sha256', $config['salt'] . $authPassword);
