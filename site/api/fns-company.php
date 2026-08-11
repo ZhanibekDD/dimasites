@@ -1,4 +1,6 @@
 <?php
+define('DNEPR_SOURCE_GATEWAY', true);
+require dirname(__FILE__) . '/source-common.php';
 /*
  * Same-origin gateway for a public company lookup in the official
  * "Transparent Business" service. It returns every safe field and document
@@ -103,8 +105,9 @@ function dnepr_cache_write($query, $payload)
 function dnepr_fns_post($fields, $cookie, $withHeaders)
 {
     if (!function_exists('curl_init')) {
-        return array('ok' => false, 'error' => 'На сервере недоступен модуль cURL.');
+        return array('ok' => false, 'error' => 'На сервере недоступен модуль cURL.', 'errno' => -1, 'status' => 0, 'latency_ms' => 0);
     }
+    $startedAt = microtime(true);
     $curl = curl_init('https://pb.nalog.ru/search-proc.json');
     $headers = array(
         'Accept: application/json, text/javascript, */*; q=0.01',
@@ -117,13 +120,13 @@ function dnepr_fns_post($fields, $cookie, $withHeaders)
     curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields, '', '&'));
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, CURLOPT_HEADER, $withHeaders ? true : false);
-    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 4);
-    curl_setopt($curl, CURLOPT_TIMEOUT, 12);
+    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 8);
+    curl_setopt($curl, CURLOPT_TIMEOUT, 24);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, false);
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($curl, CURLOPT_ENCODING, '');
-    curl_setopt($curl, CURLOPT_USERAGENT, 'stroydnepr.ru company verification/1.0');
+    curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/149.0.0.0 Safari/537.36');
     curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
     if ($cookie !== '') {
         curl_setopt($curl, CURLOPT_COOKIE, $cookie);
@@ -131,22 +134,33 @@ function dnepr_fns_post($fields, $cookie, $withHeaders)
     if (defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')) {
         curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     }
+    if (defined('CURLOPT_PROTOCOLS') && defined('CURLPROTO_HTTPS')) {
+        curl_setopt($curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+        curl_setopt($curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+    }
+    if (defined('CURLOPT_HTTP_VERSION') && defined('CURL_HTTP_VERSION_1_1')) {
+        curl_setopt($curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    }
     $raw = curl_exec($curl);
+    $errno = curl_errno($curl);
     $error = curl_error($curl);
     $status = (int) curl_getinfo($curl, CURLINFO_HTTP_CODE);
     $headerSize = $withHeaders ? (int) curl_getinfo($curl, CURLINFO_HEADER_SIZE) : 0;
     curl_close($curl);
 
     if ($raw === false || $error !== '') {
-        return array('ok' => false, 'error' => 'ФНС временно не ответила.');
+        return array('ok' => false, 'error' => dnepr_source_failure_message($errno, $status), 'errno' => $errno, 'status' => $status, 'latency_ms' => (int) round((microtime(true) - $startedAt) * 1000));
     }
     if ($status !== 200) {
-        return array('ok' => false, 'error' => 'ФНС вернула временную ошибку.', 'status' => $status);
+        return array('ok' => false, 'error' => dnepr_source_failure_message(0, $status), 'errno' => 0, 'status' => $status, 'latency_ms' => (int) round((microtime(true) - $startedAt) * 1000));
     }
     return array(
         'ok' => true,
         'headers' => $withHeaders ? substr($raw, 0, $headerSize) : '',
-        'body' => $withHeaders ? substr($raw, $headerSize) : $raw
+        'body' => $withHeaders ? substr($raw, $headerSize) : $raw,
+        'status' => $status,
+        'errno' => 0,
+        'latency_ms' => (int) round((microtime(true) - $startedAt) * 1000)
     );
 }
 
@@ -200,6 +214,14 @@ function dnepr_append_document(&$documents, $document)
 function dnepr_official_fields($row)
 {
     $definitions = array(
+        'namec' => 'Краткое наименование',
+        'namep' => 'Полное наименование',
+        'fio' => 'ФИО предпринимателя',
+        'inn' => 'ИНН',
+        'ogrn' => 'ОГРН',
+        'ogrnip' => 'ОГРНИП',
+        'sulst_name_ex' => 'Статус юридического лица',
+        'sipst_name_ex' => 'Статус предпринимателя',
         'periodcode' => 'Отчётный период',
         'yearcode' => 'Отчётный год',
         'okopf12' => 'Код организационно-правовой формы',
@@ -218,17 +240,59 @@ function dnepr_official_fields($row)
         'dtogrnip' => 'Дата присвоения ОГРНИП',
         'regionname' => 'Регион'
     );
+    $blocked = array('_dneprEntityType', 'token', 'egrulurl', 'rsmppdf', 'puchdocurl', 'gosregurl', 'bourl');
     $fields = array();
-    foreach ($definitions as $key => $label) {
-        if (isset($row[$key]) && trim((string) $row[$key]) !== '') {
+    foreach ($row as $key => $value) {
+        if (in_array($key, $blocked, true) || is_array($value) || is_object($value)) { continue; }
+        if (trim((string) $value) !== '') {
             $fields[] = array(
                 'key' => $key,
-                'label' => $label,
-                'value' => (string) $row[$key]
+                'label' => isset($definitions[$key]) ? $definitions[$key] : $key,
+                'value' => (string) $value
             );
         }
     }
     return $fields;
+}
+
+function dnepr_safe_response_record($row)
+{
+    if (!is_array($row)) { return array(); }
+    $blocked = array('token', 'egrulurl', 'rsmppdf', 'puchdocurl', 'gosregurl', 'bourl');
+    $safe = array();
+    foreach ($row as $key => $value) {
+        if (in_array($key, $blocked, true) || is_array($value) || is_object($value)) { continue; }
+        $safe[$key] = (string) $value;
+        if (count($safe) >= 80) { break; }
+    }
+    return $safe;
+}
+
+function dnepr_response_sections($response)
+{
+    $labels = array(
+        'ul' => 'Юридические лица', 'ip' => 'Индивидуальные предприниматели',
+        'upr' => 'Управляющие организации', 'rdl' => 'Дисквалифицированные лица',
+        'addr' => 'Адреса нескольких юридических лиц', 'ogrfl' => 'Ограничения физических лиц',
+        'ogrul' => 'Ограничения юридических лиц', 'uchr' => 'Участие и учредители',
+        'docul' => 'Документы юридических лиц', 'docip' => 'Документы предпринимателей'
+    );
+    $sections = array();
+    foreach ($labels as $key => $label) {
+        $part = isset($response[$key]) && is_array($response[$key]) ? $response[$key] : array();
+        $data = isset($part['data']) && is_array($part['data']) ? $part['data'] : array();
+        $records = array();
+        foreach (array_slice($data, 0, 10) as $record) { $records[] = dnepr_safe_response_record($record); }
+        $sections[] = array(
+            'id' => $key,
+            'label' => $label,
+            'rowCount' => isset($part['rowCount']) ? (int) $part['rowCount'] : count($data),
+            'returned' => count($data),
+            'hasMore' => !empty($part['hasMore']),
+            'records' => $records
+        );
+    }
+    return $sections;
 }
 
 if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -262,8 +326,14 @@ if (!dnepr_rate_allowed($ip)) {
 
 $cached = dnepr_cache_read($query);
 if ($cached !== null) {
+    $cachedDiagnosticId = dnepr_source_diagnostic_id('fns');
+    if (!isset($cached['source']) || !is_array($cached['source'])) { $cached['source'] = array(); }
+    $cached['source']['diagnosticId'] = $cachedDiagnosticId;
+    $cachedCompanies = isset($cached['companies']) && is_array($cached['companies']) ? $cached['companies'] : array();
+    dnepr_source_log('fns', $query, count($cachedCompanies) > 0 ? 'found' : 'missing', $cachedDiagnosticId, array('result_count' => count($cachedCompanies), 'http_status' => 200, 'message' => 'Ответ выдан из серверного кэша.', 'results' => $cachedCompanies));
     dnepr_respond(200, $cached);
 }
+$diagnosticId = dnepr_source_diagnostic_id('fns');
 
 $searchFields = array(
     'mode' => 'search-all', 'queryAll' => $query,
@@ -280,14 +350,17 @@ $searchFields = array(
 
 $started = dnepr_fns_post($searchFields, '', true);
 if (empty($started['ok'])) {
-    dnepr_respond(502, array('ok' => false, 'code' => 'source_unavailable', 'message' => $started['error']));
+    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => $started['status'], 'latency_ms' => $started['latency_ms'], 'error_code' => 'source_unavailable', 'message' => $started['error']));
+    dnepr_respond(502, array('ok' => false, 'code' => 'source_unavailable', 'message' => $started['error'], 'diagnosticId' => $diagnosticId, 'technical' => array('stage' => 'start-search', 'httpStatus' => $started['status'], 'curlCode' => $started['errno'])));
 }
 $task = json_decode($started['body'], true);
 if (!is_array($task) || empty($task['id'])) {
-    dnepr_respond(502, array('ok' => false, 'code' => 'invalid_source_response', 'message' => 'ФНС вернула неожиданный ответ.'));
+    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => $started['status'], 'latency_ms' => $started['latency_ms'], 'error_code' => 'invalid_source_response', 'message' => 'ФНС вернула неожиданный ответ.'));
+    dnepr_respond(502, array('ok' => false, 'code' => 'invalid_source_response', 'message' => 'ФНС вернула неожиданный ответ.', 'diagnosticId' => $diagnosticId));
 }
 if (!empty($task['captchaRequired'])) {
-    dnepr_respond(503, array('ok' => false, 'code' => 'captcha_required', 'message' => 'ФНС запросила ручную проверку. Откройте официальный сервис для продолжения.'));
+    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => 200, 'latency_ms' => $started['latency_ms'], 'error_code' => 'captcha_required', 'message' => 'ФНС запросила ручную проверку.'));
+    dnepr_respond(503, array('ok' => false, 'code' => 'captcha_required', 'message' => 'ФНС запросила ручную проверку. Откройте официальный сервис для продолжения.', 'diagnosticId' => $diagnosticId));
 }
 
 $cookie = '';
@@ -295,7 +368,8 @@ if (preg_match_all('/^Set-Cookie:\s*(JSESSIONID=[^;\r\n]+)/mi', $started['header
     $cookie = $matches[1][count($matches[1]) - 1];
 }
 if ($cookie === '') {
-    dnepr_respond(502, array('ok' => false, 'code' => 'session_missing', 'message' => 'Не удалось создать защищённую сессию ФНС.'));
+    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => 200, 'latency_ms' => $started['latency_ms'], 'error_code' => 'session_missing', 'message' => 'Не удалось создать защищённую сессию ФНС.'));
+    dnepr_respond(502, array('ok' => false, 'code' => 'session_missing', 'message' => 'Не удалось создать защищённую сессию ФНС.', 'diagnosticId' => $diagnosticId));
 }
 
 $result = null;
@@ -304,7 +378,8 @@ for ($attempt = 0; $attempt < 5; $attempt += 1) {
     $received = dnepr_fns_post(array('id' => $task['id'], 'method' => 'get-response'), $cookie, false);
     if (empty($received['ok'])) {
         if ($attempt === 4) {
-            dnepr_respond(502, array('ok' => false, 'code' => 'source_unavailable', 'message' => $received['error']));
+            dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => $received['status'], 'latency_ms' => $received['latency_ms'], 'error_code' => 'source_unavailable', 'message' => $received['error']));
+            dnepr_respond(502, array('ok' => false, 'code' => 'source_unavailable', 'message' => $received['error'], 'diagnosticId' => $diagnosticId, 'technical' => array('stage' => 'receive-response', 'httpStatus' => $received['status'], 'curlCode' => $received['errno'])));
         }
         continue;
     }
@@ -315,7 +390,8 @@ for ($attempt = 0; $attempt < 5; $attempt += 1) {
     }
 }
 if ($result === null) {
-    dnepr_respond(502, array('ok' => false, 'code' => 'source_timeout', 'message' => 'ФНС не успела подготовить ответ. Повторите проверку.'));
+    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => 200, 'latency_ms' => 0, 'error_code' => 'source_timeout', 'message' => 'ФНС не успела подготовить ответ.'));
+    dnepr_respond(502, array('ok' => false, 'code' => 'source_timeout', 'message' => 'ФНС не успела подготовить ответ. Повторите проверку.', 'diagnosticId' => $diagnosticId));
 }
 
 $legalRows = isset($result['ul']['data']) && is_array($result['ul']['data']) ? $result['ul']['data'] : array();
@@ -417,13 +493,16 @@ $payload = array(
         'returned' => count($companies)
     ),
     'companies' => $companies,
+    'responseSections' => dnepr_response_sections($result),
     'source' => array(
         'name' => 'ФНС России · Прозрачный бизнес',
         'url' => 'https://pb.nalog.ru/',
         'retrievedAt' => gmdate('c'),
-        'cached' => false
+        'cached' => false,
+        'diagnosticId' => $diagnosticId
     ),
     'disclaimer' => 'Ответ получен из официального открытого сервиса ФНС. Для юридически значимого решения сформируйте подписанную выписку ЕГРЮЛ или ЕГРИП.'
 );
+dnepr_source_log('fns', $query, count($companies) > 0 ? 'found' : 'missing', $diagnosticId, array('result_count' => count($companies), 'http_status' => 200, 'results' => $companies));
 dnepr_cache_write($query, $payload);
 dnepr_respond(200, $payload);
