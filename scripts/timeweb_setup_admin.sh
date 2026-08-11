@@ -2,7 +2,8 @@
 set -eu
 
 PRIVATE_DIRECTORY="${HOME}/dnepr-private"
-CONFIG_FILE="${PRIVATE_DIRECTORY}/admin.php"
+CONFIG_FILE="${PRIVATE_DIRECTORY}/admin.json"
+LEGACY_CONFIG_FILE="${PRIVATE_DIRECTORY}/admin.php"
 ADMIN_USER="dnepr"
 
 umask 077
@@ -14,18 +15,28 @@ if [ -f "${CONFIG_FILE}" ]; then
     echo "Previous admin access backed up: ${BACKUP_FILE}"
 fi
 
+if [ -f "${LEGACY_CONFIG_FILE}" ]; then
+    LEGACY_BACKUP_FILE="${LEGACY_CONFIG_FILE}.backup-$(date +%Y%m%d-%H%M%S)"
+    cp "${LEGACY_CONFIG_FILE}" "${LEGACY_BACKUP_FILE}"
+    rm -f "${LEGACY_CONFIG_FILE}"
+    echo "Legacy admin access backed up: ${LEGACY_BACKUP_FILE}"
+fi
+
 ADMIN_PASSWORD="$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
 ADMIN_SALT="$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
 PASSWORD_HASH="$(printf '%s' "${ADMIN_SALT}${ADMIN_PASSWORD}" | sha256sum | awk '{print $1}')"
 
-cat > "${CONFIG_FILE}" <<EOF
-<?php
-return array(
-    'username' => '${ADMIN_USER}',
-    'salt' => '${ADMIN_SALT}',
-    'password_hash' => '${PASSWORD_HASH}',
-);
+TEMP_CONFIG_FILE="${CONFIG_FILE}.tmp"
+cat > "${TEMP_CONFIG_FILE}" <<EOF
+{
+  "version": 2,
+  "username": "${ADMIN_USER}",
+  "salt": "${ADMIN_SALT}",
+  "password_hash": "${PASSWORD_HASH}"
+}
 EOF
+
+mv "${TEMP_CONFIG_FILE}" "${CONFIG_FILE}"
 
 chmod 0700 "${PRIVATE_DIRECTORY}"
 chmod 0600 "${CONFIG_FILE}"
