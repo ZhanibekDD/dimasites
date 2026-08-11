@@ -53,7 +53,7 @@ if [ ! -f "${MANAGED_MARKER}" ]; then
     echo "Initial backup created: ${BACKUP_ARCHIVE}"
 fi
 
-rsync -a --delete --exclude='.well-known/' \
+rsync -a --delete --exclude='.well-known/' --exclude='admin/.access.php' \
     "${DEPLOY_REPOSITORY}/site/" "${PUBLIC_DIRECTORY}/"
 
 git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD > "${PUBLIC_DIRECTORY}/.deploy-version"
