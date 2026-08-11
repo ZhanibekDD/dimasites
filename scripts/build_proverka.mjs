@@ -14,8 +14,12 @@ await mkdir(join(vendor, 'tesseract', 'core'), { recursive: true });
 await mkdir(join(vendor, 'tesseract', 'lang'), { recursive: true });
 
 await build({
-  entryPoints: [join(root, 'src', 'proverka.js')],
-  outfile: join(site, 'assets', 'js', 'proverka.bundle.js'),
+  entryPoints: {
+    proverka: join(root, 'src', 'proverka.js'),
+    stroypoisk: join(root, 'src', 'stroypoisk.js'),
+  },
+  outdir: join(site, 'assets', 'js'),
+  entryNames: '[name].bundle',
   bundle: true,
   minify: true,
   sourcemap: false,
@@ -52,4 +56,4 @@ for (const language of ['rus', 'eng']) {
   );
 }
 
-console.log('Proverka production bundle and local OCR assets built.');
+console.log('Proverka and Stroypoisk production bundles plus local OCR assets built.');

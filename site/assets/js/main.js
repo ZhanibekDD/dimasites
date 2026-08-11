@@ -46,7 +46,10 @@
   mobileActionBar.setAttribute('aria-label', 'Быстрые действия');
   const auditHref = document.querySelector('#audit') ? '#audit' : '/#audit';
   const analyzerHref = document.querySelector('#analyzer') ? '#analyzer' : null;
-  mobileActionBar.innerHTML = `<a href="tel:+73496453002">Позвонить</a><a href="${analyzerHref || auditHref}">${analyzerHref ? 'Проверить документ' : 'Оценить проект'}</a>`;
+  const searchHref = document.querySelector('[data-search-form]') ? '#search' : null;
+  const toolHref = searchHref || analyzerHref || auditHref;
+  const toolLabel = searchHref ? 'Стройпоиск' : analyzerHref ? 'Проверить документ' : 'Оценить проект';
+  mobileActionBar.innerHTML = `<a href="tel:+73496453002">Позвонить</a><a href="${toolHref}">${toolLabel}</a>`;
   document.body.append(mobileActionBar);
 
   const revealItems = document.querySelectorAll('[data-reveal]');
