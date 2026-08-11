@@ -59,9 +59,14 @@ required = [
     ROOT / "sitemap.xml",
     ROOT / ".htaccess",
     ROOT / "contact.php",
+    ROOT / "admin" / "index.php",
+    ROOT / "assets" / "css" / "admin.css",
     ROOT / "api" / "fns-company.php",
     ROOT / "proverka" / "index.html",
     ROOT / "proverka" / "poisk" / "index.html",
+    ROOT / "proverka" / "navigator" / "index.html",
+    ROOT / "assets" / "js" / "navigator.js",
+    ROOT / "assets" / "css" / "navigator.css",
     ROOT / "assets" / "js" / "proverka.bundle.js",
     ROOT / "assets" / "js" / "stroypoisk.bundle.js",
     ROOT / "assets" / "vendor" / "pdfjs" / "pdf.min.mjs",
@@ -74,6 +79,58 @@ required = [
 ]
 for item in required:
     if not item.exists(): errors.append(f"missing required file: {item.name}")
+
+gateway = (ROOT / "api" / "fns-company.php").read_text(encoding="utf-8")
+for marker in ("officialFields", "documents", "rsmppdf", "puchdocurl", "gosregurl", "counts"):
+    if marker not in gateway:
+        errors.append(f"fns-company.php: missing full-response marker {marker}")
+
+contact_gateway = (ROOT / "contact.php").read_text(encoding="utf-8")
+for marker in ("calculate_lead_score", "create_lead_id", "store_lead", "lead_score", "dnepr-private"):
+    if marker not in contact_gateway:
+        errors.append(f"contact.php: missing production lead marker {marker}")
+if "+7 (3496) 43-57-67" in contact_gateway:
+    errors.append("contact.php: obsolete fallback phone remains")
+
+admin_gateway = (ROOT / "admin" / "index.php").read_text(encoding="utf-8")
+for marker in ("secure_equals_legacy", "dnepr-private", "lead-status-", "format'] === 'csv'", "noindex"):
+    if marker not in admin_gateway:
+        errors.append(f"admin/index.php: missing protected lead console marker {marker}")
+
+admin_setup = (ROOT.parent / "scripts" / "timeweb_setup_admin.sh").read_text(encoding="utf-8")
+for marker in ("/dev/urandom", "password_hash", "chmod 0600", "shown only once"):
+    if marker not in admin_setup:
+        errors.append(f"timeweb_setup_admin.sh: missing secure setup marker {marker}")
+
+main_js = (ROOT / "assets" / "js" / "main.js").read_text(encoding="utf-8")
+for marker in ("lead_id", "lead_score", "lead_priority"):
+    if marker not in main_js:
+        errors.append(f"main.js: missing lead analytics marker {marker}")
+
+navigator_js = (ROOT / "assets" / "js" / "navigator.js").read_text(encoding="utf-8")
+for marker in ("navigator_route_created", "officialSources", "downloadReport", "отсутствие записи"):
+    if marker not in navigator_js:
+        errors.append(f"navigator.js: missing production navigator marker {marker}")
+
+search_source = (ROOT.parent / "src" / "stroypoisk.js").read_text(encoding="utf-8")
+if "sources: ['fns-profile', 'egrz', 'eis']" not in search_source:
+    errors.append("stroypoisk.js: company route must contain one FNS source without duplicate extract card")
+for marker in ("Все поля ответа ФНС", "company-documents", "safeOfficialHref"):
+    if marker not in search_source:
+        errors.append(f"stroypoisk.js: missing full FNS result UI marker {marker}")
+
+about_html = (ROOT / "about" / "index.html").read_text(encoding="utf-8")
+projects_html = (ROOT / "projects" / "index.html").read_text(encoding="utf-8")
+for page_name, content in (("about/index.html", about_html), ("projects/index.html", projects_html)):
+    if "sports-court.svg" in content or "stadium-stands.svg" in content:
+        errors.append(f"{page_name}: schematic image remains where a real company photo is required")
+
+for page in ROOT.rglob("*.html"):
+    if page.name == "404.html":
+        continue
+    content = page.read_text(encoding="utf-8")
+    if "/assets/js/main.js?v=20260811-lead1" not in content:
+        errors.append(f"{page.relative_to(ROOT)}: stale main.js cache version")
 
 sitemap = (ROOT / "sitemap.xml").read_text(encoding="utf-8") if (ROOT / "sitemap.xml").exists() else ""
 for rel, canonical in canonical_urls:

@@ -5,7 +5,7 @@ const types = {
     label: 'Компания',
     short: 'ИНН / ОГРН / наименование',
     intro: 'Проверим юридическое лицо, официальный статус и строительный след по открытым государственным источникам.',
-    sources: ['fns-profile', 'fns-extract', 'egrz', 'eis'],
+    sources: ['fns-profile', 'egrz', 'eis'],
   },
   egrz: {
     label: 'Заключение ЕГРЗ',
@@ -248,44 +248,105 @@ function renderCompanyMessage(state, title, message, retry = false) {
   ui.companyProfileBody.querySelector('[data-company-retry]')?.addEventListener('click', () => fetchCompanyProfile(true));
 }
 
+const fnsOfficialHosts = new Set([
+  'pb.nalog.ru',
+  'egrul.nalog.ru',
+  'rmsp.nalog.ru',
+  'bo.nalog.gov.ru',
+  'service.nalog.ru',
+]);
+
+function safeOfficialHref(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'https:' && fnsOfficialHosts.has(url.hostname.toLowerCase()) ? url.href : '';
+  } catch (_) {
+    return '';
+  }
+}
+
+function describeOfficialField(key, value) {
+  const normalized = String(value ?? '');
+  if (['pr_liq', 'invalid', 'predo'].includes(key)) {
+    if (normalized === '0') return '0 · нет';
+    if (normalized === '1') return '1 · да';
+  }
+  return normalized || '—';
+}
+
+function renderCompanyDocuments(company) {
+  const documents = Array.isArray(company.documents) ? company.documents : [];
+  const links = documents.map((document) => {
+    const href = safeOfficialHref(document.url);
+    if (!href) return '';
+    const kind = ({
+      'direct-pdf': 'PDF из ответа ФНС',
+      'official-card': 'Карточка ФНС',
+      'authorized-service': 'Сервис с ЕСИА',
+      'official-service': 'Официальный сервис',
+    })[document.kind] || 'Документ ФНС';
+    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">
+      <span><small>${escapeHtml(kind)}</small><strong>${escapeHtml(document.label || 'Официальный документ')}</strong><em>${escapeHtml(document.note || '')}</em></span><b>↗</b>
+    </a>`;
+  }).filter(Boolean).join('');
+  if (!links) return '';
+  return `<section class="company-documents" aria-label="Документы и сервисы ФНС">
+    <div class="company-documents-head"><span>ДОКУМЕНТЫ</span><strong>${documents.length}</strong><p>Показаны только ссылки, которые вернул официальный ответ ФНС, и официальный сервис выписки.</p></div>
+    <div class="company-document-links">${links}</div>
+  </section>`;
+}
+
+function renderCompanyRecord(company, index, count, payload) {
+  const fields = Array.isArray(company.officialFields) ? company.officialFields : [];
+  const fieldRows = fields.map((field) => `<div><dt>${escapeHtml(field.label || field.key || 'Поле ФНС')}</dt><dd>${escapeHtml(describeOfficialField(field.key, field.value))}</dd><small>${escapeHtml(field.key || '')}</small></div>`).join('');
+  const retrievedAt = payload.source?.retrievedAt || new Date().toISOString();
+  return `<article class="company-card company-card--record">
+    <header>
+      <div><span>РЕЗУЛЬТАТ ${String(index + 1).padStart(2, '0')} / ${String(count).padStart(2, '0')} · ${company.entityType === 'entrepreneur' ? 'ИП' : 'ЮРИДИЧЕСКОЕ ЛИЦО'}</span><h3>${escapeHtml(company.shortName || company.fullName || active.query)}</h3></div>
+      <strong>${escapeHtml(company.status || 'Статус не указан')}</strong>
+    </header>
+    ${company.fullName && company.fullName !== company.shortName ? `<p class="company-full-name">${escapeHtml(company.fullName)}</p>` : ''}
+    <dl class="company-facts">
+      <div><dt>ИНН</dt><dd>${escapeHtml(company.inn || '—')}</dd></div>
+      <div><dt>${company.entityType === 'entrepreneur' ? 'ОГРНИП' : 'ОГРН'}</dt><dd>${escapeHtml(company.ogrn || '—')}</dd></div>
+      <div><dt>Дата регистрации</dt><dd>${escapeHtml(company.registeredAt || '—')}</dd></div>
+      <div><dt>Дата присвоения ОГРН</dt><dd>${escapeHtml(company.ogrnAssignedAt || '—')}</dd></div>
+      <div><dt>Регион</dt><dd>${escapeHtml(company.region || '—')}</dd></div>
+      <div><dt>Статус · код</dt><dd>${escapeHtml([company.status, company.statusCode].filter(Boolean).join(' · ') || '—')}</dd></div>
+      <div class="company-fact-wide"><dt>Основной ОКВЭД</dt><dd>${escapeHtml([company.okved, company.okvedName].filter(Boolean).join(' · ') || '—')}</dd></div>
+      <div><dt>Отчётный период</dt><dd>${escapeHtml([company.reportingYear, company.reportingPeriod].filter(Boolean).join(' · ') || '—')}</dd></div>
+    </dl>
+    <details class="company-response-fields" ${index === 0 ? 'open' : ''}>
+      <summary><span>Все поля ответа ФНС</span><b>${fields.length}</b><em>развернуть ↘</em></summary>
+      <dl class="company-detail-grid">${fieldRows || '<div><dt>Дополнительные поля</dt><dd>ФНС не вернула дополнительных значений</dd></div>'}</dl>
+    </details>
+    ${renderCompanyDocuments(company)}
+    <footer>
+      <div><span>Источник и время получения</span><strong>${escapeHtml(payload.source?.name || 'ФНС России')}</strong><time>${escapeHtml(new Date(retrievedAt).toLocaleString('ru-RU'))}</time></div>
+      <a class="company-source-link" href="${escapeHtml(safeOfficialHref(payload.source?.url) || 'https://pb.nalog.ru/')}" target="_blank" rel="noopener noreferrer">Открыть первоисточник <span>↗</span></a>
+    </footer>
+  </article>`;
+}
+
 function renderCompanyData(payload) {
   if (!ui.companyProfile || !ui.companyProfileBody || !active) return;
-  const company = payload.companies?.[0];
-  if (!company) {
+  const companies = Array.isArray(payload.companies) ? payload.companies : [];
+  if (!companies.length) {
     renderCompanyMessage('missing', 'Компания не найдена в ответе ФНС', 'Уточните ИНН, ОГРН или полное наименование. Это не доказывает, что организации не существует.');
     return;
   }
-  const retrievedAt = payload.source?.retrievedAt || new Date().toISOString();
-  const extractLabel = company.entityType === 'entrepreneur' ? 'Подписанная выписка ЕГРИП' : 'Подписанная выписка ЕГРЮЛ';
-  const officialLinks = [
-    company.boUrl ? `<a href="${escapeHtml(company.boUrl)}" target="_blank" rel="noopener noreferrer">Бухгалтерская отчётность <span>↗</span></a>` : '',
-    `<a href="https://egrul.nalog.ru/" target="_blank" rel="noopener noreferrer">${extractLabel} <span>↗</span></a>`,
-  ].filter(Boolean).join('');
-  const extraCount = Math.max(0, Number(payload.total || 0) - 1);
+  const total = Number(payload.total || companies.length);
+  const legalCount = Number(payload.counts?.legalEntities || 0);
+  const entrepreneurCount = Number(payload.counts?.entrepreneurs || 0);
   ui.companyProfile.hidden = false;
-  setCompanyState('found', payload.source?.cached ? 'Ответ ФНС · кэш' : 'Ответ ФНС · получен');
+  setCompanyState('found', `${payload.source?.cached ? 'Ответ ФНС · кэш' : 'Ответ ФНС · получен'} · ${total}`);
   ui.companyProfileBody.innerHTML = `
-    <article class="company-card">
-      <header>
-        <div><span>ОФИЦИАЛЬНАЯ ЗАПИСЬ</span><h3>${escapeHtml(company.shortName || company.fullName || active.query)}</h3></div>
-        <strong>${escapeHtml(company.status || 'Статус не указан')}</strong>
-      </header>
-      ${company.fullName && company.fullName !== company.shortName ? `<p class="company-full-name">${escapeHtml(company.fullName)}</p>` : ''}
-      <dl class="company-facts">
-        <div><dt>ИНН</dt><dd>${escapeHtml(company.inn || '—')}</dd></div>
-        <div><dt>ОГРН</dt><dd>${escapeHtml(company.ogrn || '—')}</dd></div>
-        <div><dt>Дата регистрации</dt><dd>${escapeHtml(company.registeredAt || '—')}</dd></div>
-        <div><dt>Регион</dt><dd>${escapeHtml(company.region || '—')}</dd></div>
-        <div class="company-fact-wide"><dt>Основной ОКВЭД</dt><dd>${escapeHtml([company.okved, company.okvedName].filter(Boolean).join(' · ') || '—')}</dd></div>
-        <div><dt>Отчётный год</dt><dd>${escapeHtml(company.reportingYear || '—')}</dd></div>
-      </dl>
-      ${extraCount ? `<p class="company-matches">По текстовому запросу найдено ещё записей: ${extraCount}. Для однозначной карточки используйте ИНН или ОГРН.</p>` : ''}
-      <footer>
-        <div><span>Источник</span><strong>${escapeHtml(payload.source?.name || 'ФНС России')}</strong><time>${escapeHtml(new Date(retrievedAt).toLocaleString('ru-RU'))}</time></div>
-        <div class="company-official-links">${officialLinks}</div>
-      </footer>
-      <p class="company-disclaimer">${escapeHtml(payload.disclaimer || 'Для юридически значимого решения сформируйте актуальную выписку ЕГРЮЛ.')}</p>
-    </article>`;
+    <div class="fns-response-summary">
+      <div><span>ПОЛНЫЙ ОТВЕТ ПОИСКА</span><strong>${total}</strong><p>Найдено записей. На странице показаны все ${companies.length} записей, возвращённые текущим ответом ФНС.</p></div>
+      <dl><div><dt>Юридические лица</dt><dd>${legalCount}</dd></div><div><dt>Индивидуальные предприниматели</dt><dd>${entrepreneurCount}</dd></div><div><dt>Источник</dt><dd>pb.nalog.ru</dd></div></dl>
+    </div>
+    <div class="company-results">${companies.map((company, index) => renderCompanyRecord(company, index, companies.length, payload)).join('')}</div>
+    <p class="company-disclaimer">${escapeHtml(payload.disclaimer || 'Для юридически значимого решения сформируйте актуальную выписку ЕГРЮЛ или ЕГРИП.')}</p>`;
 }
 
 async function fetchCompanyProfile(force = false) {
@@ -328,7 +389,7 @@ async function fetchCompanyProfile(force = false) {
       return;
     }
     const company = payload.companies[0];
-    markFnsSource('found', `${company.shortName || company.fullName}; ИНН ${company.inn}; ОГРН ${company.ogrn}`, payload.source?.retrievedAt);
+    markFnsSource('found', `ФНС вернула записей: ${payload.total || payload.companies.length}. Первая: ${company.shortName || company.fullName}; ИНН ${company.inn}; ОГРН ${company.ogrn}`, payload.source?.retrievedAt);
     persist();
     renderCompanyData(payload);
   } catch (error) {
@@ -535,9 +596,31 @@ function renderHistory() {
 }
 
 function passportData() {
-  const company = active.companyProfile?.companies?.[0];
+  const companies = (active.companyProfile?.companies || []).map((company) => ({
+    entityType: company.entityType || '',
+    shortName: company.shortName || '',
+    fullName: company.fullName || '',
+    status: company.status || '',
+    inn: company.inn || '',
+    ogrn: company.ogrn || '',
+    registeredAt: company.registeredAt || '',
+    ogrnAssignedAt: company.ogrnAssignedAt || '',
+    region: company.region || '',
+    okved: company.okved || '',
+    okvedName: company.okvedName || '',
+    reportingYear: company.reportingYear || '',
+    reportingPeriod: company.reportingPeriod || '',
+    officialFields: Array.isArray(company.officialFields) ? company.officialFields : [],
+    documents: (company.documents || []).map((document) => ({
+      label: document.label || '',
+      url: safeOfficialHref(document.url),
+      kind: document.kind || '',
+      note: document.note || '',
+    })).filter((document) => document.url),
+    source: active.companyProfile.source,
+  }));
   return {
-    schema: 'dnepr-stroypoisk-passport/1.0',
+    schema: 'dnepr-stroypoisk-passport/1.1',
     id: active.id,
     query: active.query,
     queryType: active.type,
@@ -547,18 +630,8 @@ function passportData() {
     updatedAt: active.updatedAt,
     projectStage: active.stage,
     nextAction: active.nextAction,
-    company: company ? {
-      shortName: company.shortName || '',
-      fullName: company.fullName || '',
-      status: company.status || '',
-      inn: company.inn || '',
-      ogrn: company.ogrn || '',
-      registeredAt: company.registeredAt || '',
-      region: company.region || '',
-      okved: company.okved || '',
-      okvedName: company.okvedName || '',
-      source: active.companyProfile.source,
-    } : null,
+    company: companies[0] || null,
+    companies,
     evidence: active.sources.map((record) => ({
       source: sources[record.id].name,
       sourceUrl: sources[record.id].url,
@@ -592,8 +665,11 @@ function exportHtml() {
   if (!active) return;
   const data = passportData();
   const rows = data.evidence.map((item) => `<tr><td>${escapeHtml(item.source)}</td><td>${escapeHtml(item.statusLabel)}</td><td>${escapeHtml(item.retrievedAt ? new Date(item.retrievedAt).toLocaleString('ru-RU') : '—')}</td><td>${escapeHtml(item.note || '—')}</td><td><a href="${escapeHtml(item.sourceUrl)}">Открыть источник</a></td></tr>`).join('');
-  const company = data.company ? `<section><h2>${escapeHtml(data.company.shortName || data.company.fullName)}</h2><p>${escapeHtml(data.company.fullName || '')}</p><dl><div><dt>Статус</dt><dd>${escapeHtml(data.company.status || '—')}</dd></div><div><dt>ИНН</dt><dd>${escapeHtml(data.company.inn || '—')}</dd></div><div><dt>ОГРН</dt><dd>${escapeHtml(data.company.ogrn || '—')}</dd></div><div><dt>Регион</dt><dd>${escapeHtml(data.company.region || '—')}</dd></div><div><dt>ОКВЭД</dt><dd>${escapeHtml([data.company.okved, data.company.okvedName].filter(Boolean).join(' · ') || '—')}</dd></div></dl></section>` : '';
-  const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>СтройПаспорт ${escapeHtml(data.id)}</title><style>body{font:15px/1.55 Arial,sans-serif;max-width:1100px;margin:auto;padding:44px;color:#111d27}h1{font-size:38px;margin-bottom:8px}.meta{color:#64717a}dl{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid #d7d9d7}dl div{padding:12px;border-bottom:1px solid #d7d9d7}dt{color:#64717a;font-size:11px;text-transform:uppercase}dd{margin:5px 0 0;font-weight:700}table{width:100%;border-collapse:collapse;margin:30px 0}th,td{text-align:left;padding:12px;border:1px solid #d7d9d7;vertical-align:top}th{background:#111d27;color:#fff}.warning{border-left:5px solid #ffd229;padding:16px;background:#f5f2e8}@media(max-width:700px){body{padding:20px}dl{grid-template-columns:1fr}table{font-size:12px;display:block;overflow:auto}}</style></head><body><h1>СтройПаспорт проверки</h1><p class="meta">${escapeHtml(data.id)} · ${escapeHtml(new Date(data.updatedAt).toLocaleString('ru-RU'))}</p><h2>${escapeHtml(data.query)}</h2><p>${escapeHtml(data.queryTypeLabel)} · ${escapeHtml(data.validation)}</p>${company}<table><thead><tr><th>Источник</th><th>Статус</th><th>Дата проверки</th><th>Заметка</th><th>Первоисточник</th></tr></thead><tbody>${rows}</tbody></table><p><b>Следующий шаг:</b> ${escapeHtml(data.nextAction)}</p><p class="warning">${escapeHtml(data.disclaimer)}</p></body></html>`;
+  const companies = data.companies.map((company, index) => {
+    const documents = company.documents.map((document) => `<li><a href="${escapeHtml(document.url)}">${escapeHtml(document.label)}</a> — ${escapeHtml(document.note || '')}</li>`).join('');
+    return `<section><p class="meta">Результат ${index + 1} из ${data.companies.length}</p><h2>${escapeHtml(company.shortName || company.fullName)}</h2><p>${escapeHtml(company.fullName || '')}</p><dl><div><dt>Статус</dt><dd>${escapeHtml(company.status || '—')}</dd></div><div><dt>ИНН</dt><dd>${escapeHtml(company.inn || '—')}</dd></div><div><dt>ОГРН / ОГРНИП</dt><dd>${escapeHtml(company.ogrn || '—')}</dd></div><div><dt>Дата регистрации</dt><dd>${escapeHtml(company.registeredAt || '—')}</dd></div><div><dt>Регион</dt><dd>${escapeHtml(company.region || '—')}</dd></div><div><dt>ОКВЭД</dt><dd>${escapeHtml([company.okved, company.okvedName].filter(Boolean).join(' · ') || '—')}</dd></div></dl>${documents ? `<h3>Документы ФНС</h3><ul>${documents}</ul>` : ''}</section>`;
+  }).join('');
+  const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>СтройПаспорт ${escapeHtml(data.id)}</title><style>body{font:15px/1.55 Arial,sans-serif;max-width:1100px;margin:auto;padding:44px;color:#111d27}h1{font-size:38px;margin-bottom:8px}section{margin:36px 0}.meta{color:#64717a}dl{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid #d7d9d7}dl div{padding:12px;border-bottom:1px solid #d7d9d7}dt{color:#64717a;font-size:11px;text-transform:uppercase}dd{margin:5px 0 0;font-weight:700}table{width:100%;border-collapse:collapse;margin:30px 0}th,td{text-align:left;padding:12px;border:1px solid #d7d9d7;vertical-align:top}th{background:#111d27;color:#fff}.warning{border-left:5px solid #ffd229;padding:16px;background:#f5f2e8}@media(max-width:700px){body{padding:20px}dl{grid-template-columns:1fr}table{font-size:12px;display:block;overflow:auto}}</style></head><body><h1>СтройПаспорт проверки</h1><p class="meta">${escapeHtml(data.id)} · ${escapeHtml(new Date(data.updatedAt).toLocaleString('ru-RU'))}</p><h2>${escapeHtml(data.query)}</h2><p>${escapeHtml(data.queryTypeLabel)} · ${escapeHtml(data.validation)}</p>${companies}<table><thead><tr><th>Источник</th><th>Статус</th><th>Дата проверки</th><th>Заметка</th><th>Первоисточник</th></tr></thead><tbody>${rows}</tbody></table><p><b>Следующий шаг:</b> ${escapeHtml(data.nextAction)}</p><p class="warning">${escapeHtml(data.disclaimer)}</p></body></html>`;
   download(`${active.id.toLowerCase()}.html`, html, 'text/html;charset=utf-8');
 }
 

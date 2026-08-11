@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Навигатор строительных процедур ЯНАО, ХМАО и Тюменской области — ДНЕПР</title>
+  <meta name="description" content="Выберите регион и стадию объекта: получите маршрут по участку, экспертизе, разрешению, строительству, закупке или вводу с официальными источниками.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <link rel="canonical" href="https://stroydnepr.ru/proverka/navigator/">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="Государственный навигатор строительного проекта — ГК ДНЕПР">
+  <meta property="og:description" content="Практический маршрут по официальным сервисам для проекта в ЯНАО, ХМАО или Тюменской области.">
+  <meta property="og:url" content="https://stroydnepr.ru/proverka/navigator/">
+  <meta property="og:image" content="https://stroydnepr.ru/assets/images/hero-yard.webp">
+  <link rel="icon" href="/assets/images/logo-v2.svg?v=20260811-snow2" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/css/main.css?v=20260811-lead1">
+  <link rel="stylesheet" href="/assets/css/navigator.css?v=20260811-nav1">
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"ДНЕПР — навигатор строительных процедур","url":"https://stroydnepr.ru/proverka/navigator/","applicationCategory":"BusinessApplication","operatingSystem":"Web browser","isAccessibleForFree":true,"provider":{"@type":"Organization","name":"Группа компаний ДНЕПР","url":"https://stroydnepr.ru/"}}</script>
+</head>
+<body class="navigator-page">
+  <a class="skip-link" href="#main">К содержанию</a>
+  <header class="site-header inner-header" data-header><div class="container header-inner"><a class="brand" href="/" aria-label="ГК ДНЕПР — на главную"><img class="brand-mark" src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="46" height="46"><span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний · с 1992 года</span></span></a><button class="menu-button" type="button" aria-expanded="false" aria-label="Открыть меню">☰</button><nav class="main-nav" aria-label="Основная навигация"><a href="/about/">Компания</a><a href="/services/">Услуги</a><a href="/proverka/poisk/">Стройпоиск</a><a href="/proverka/">Анализ документа</a><a href="/contacts/">Контакты</a><a class="header-cta" href="#navigator">Построить маршрут</a></nav></div></header>
+
+  <main id="main">
+    <section class="navigator-hero">
+      <div class="navigator-grid" aria-hidden="true"></div>
+      <div class="container navigator-hero__inner">
+        <div><p class="navigator-kicker"><i></i> ГОСУДАРСТВЕННЫЙ НАВИГАТОР</p><h1>От стадии объекта — к <em>следующему документу</em></h1><p>Выберите регион и задачу. Система соберёт последовательность действий, контрольный список и официальные сервисы — без выдуманного статуса и без регистрации.</p><div class="navigator-hero__actions"><a class="button button-primary" href="#navigator">Собрать маршрут <span class="arrow">↘</span></a><span>ЯНАО · ХМАО–Югра · Тюменская область</span></div></div>
+        <aside class="navigator-orbit"><div aria-hidden="true"><i></i><b></b><span>7</span></div><strong>контуров проверки</strong><small>участок · проект · экспертиза · разрешение · стройка · закупка · ввод</small></aside>
+      </div>
+    </section>
+
+    <section class="navigator-workspace" id="navigator" data-navigator>
+      <div class="container">
+        <div class="navigator-heading"><div><span>01 / ИСХОДНЫЕ ДАННЫЕ</span><h2>Что происходит с объектом?</h2></div><p>Маршрут является инженерной памяткой. Фактический орган и состав документов зависят от типа, местоположения и полномочий по конкретному объекту.</p></div>
+        <form class="navigator-controls" data-navigator-form>
+          <label><span>Регион объекта</span><select data-region required><option value="">Выберите регион</option><option value="yanao">Ямало-Ненецкий АО</option><option value="hmao">Ханты-Мансийский АО — Югра</option><option value="tyumen">Тюменская область</option></select></label>
+          <label><span>Текущая задача</span><select data-task required><option value="">Выберите задачу</option><option value="land">Проверить участок и ограничения</option><option value="project">Подготовить проектную документацию</option><option value="expertise">Пройти или проверить экспертизу</option><option value="permit">Получить разрешение на строительство</option><option value="construction">Начать строительство или реконструкцию</option><option value="procurement">Проверить закупку и допуск подрядчика</option><option value="commissioning">Подготовить ввод в эксплуатацию</option><option value="refusal">Разобрать отказ или замечания</option></select></label>
+          <button type="submit"><span>Построить маршрут</span><b>↘</b></button>
+        </form>
+        <p class="navigator-error" data-navigator-error hidden role="alert"></p>
+
+        <div class="navigator-result" data-navigator-result hidden>
+          <header class="navigator-result__head"><div><span>02 / ПЕРСОНАЛЬНЫЙ МАРШРУТ</span><h2 data-route-title></h2><p data-route-intro></p></div><div class="navigator-stamp"><b data-route-code>—</b><span>обновлено<br>11.08.2026</span></div></header>
+          <div class="navigator-progress"><span><i data-route-progress></i></span><b data-route-progress-label>0 из 0 выполнено</b></div>
+          <ol class="route-steps" data-route-steps></ol>
+          <section class="route-sources"><header><span>03 / ПЕРВОИСТОЧНИКИ</span><h3>Только официальные сервисы</h3><p>Сайт не считает отсутствие записи доказательством отсутствия документа.</p></header><div data-route-sources></div></section>
+          <div class="route-tools"><button type="button" data-route-copy>Скопировать маршрут</button><button type="button" data-route-download>Скачать HTML-отчёт</button><button type="button" data-route-reset>Изменить параметры</button><span data-route-status role="status" aria-live="polite"></span></div>
+
+          <section class="navigator-lead" aria-labelledby="navigator-lead-title"><div><span>04 / ИНЖЕНЕРНЫЙ КОНТАКТ</span><h2 id="navigator-lead-title">Передать маршрут специалисту</h2><p>В заявку автоматически попадут регион, задача, выполненные пункты и официальные источники. Сервер присвоит обращению номер и приоритет.</p></div><form action="/contact.php" method="post" data-contact-form data-navigator-lead><div class="navigator-form-grid"><div class="field"><label for="nav-name">Имя *</label><input id="nav-name" name="name" required autocomplete="name" maxlength="80"></div><div class="field"><label for="nav-phone">Телефон *</label><input id="nav-phone" name="phone" type="tel" required autocomplete="tel" maxlength="30"></div><div class="field"><label for="nav-company">Компания</label><input id="nav-company" name="company" autocomplete="organization" maxlength="120"></div><div class="field"><label for="nav-email">E-mail</label><input id="nav-email" name="email" type="email" autocomplete="email" maxlength="160"></div></div><textarea name="message" data-navigator-message hidden>Маршрут государственного навигатора</textarea><input type="hidden" name="source" value="Государственный навигатор"><div class="honeypot" aria-hidden="true"><label for="nav-website">Сайт</label><input id="nav-website" name="website" tabindex="-1" autocomplete="off"></div><label class="consent consent--dark"><input name="consent" type="checkbox" value="1" required><span>Согласен на обработку контактных данных согласно <a href="/privacy/" target="_blank" rel="noopener">политике</a>.</span></label><button class="button button-primary form-submit" type="submit">Получить инженерный разбор <span class="arrow">↗</span></button><p class="form-status" role="status" aria-live="polite"></p></form></section>
+        </div>
+      </div>
+    </section>
+
+    <section class="navigator-rules"><div class="container"><div><span>ПРАВИЛО ДОКАЗУЕМОСТИ</span><h2>«Не найдено» — не значит «не существует»</h2></div><ul><li>Учитывайте полномочия органа по конкретному объекту.</li><li>Проверяйте актуальность ГПЗУ, ППТ, ПМТ и заключений.</li><li>Сохраняйте номер заявления, дату и версию документа.</li><li>Не принимайте навигатор за официальное решение ведомства.</li></ul></div></section>
+  </main>
+
+  <footer class="site-footer"><div class="container"><div class="footer-main"><div class="footer-about"><a class="brand" href="/"><img class="brand-mark" src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="46" height="46"><span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний</span></span></a><p>Промышленное строительство и проектирование.</p></div><div class="footer-column"><h3>Инструменты</h3><nav><a href="/proverka/poisk/">Стройпоиск</a><a href="/proverka/">Анализ документа</a><a href="/proverka/navigator/">Госнавигатор</a></nav></div><div class="footer-column"><h3>Услуги</h3><nav><a href="/services/">Все услуги</a><a href="/services/truboprovody.html">Трубопроводы</a></nav></div><div class="footer-column"><h3>Контакты</h3><address><a href="tel:+73496453002">+7 (3496) 45-30-02</a><a href="mailto:office@stroydnepr.ru">office@stroydnepr.ru</a></address></div></div><div class="footer-bottom"><span>© 1992–2026 ООО «ДНЕПР»</span><a href="/privacy/">Политика конфиденциальности</a></div></div></footer>
+  <script src="/assets/js/main.js?v=20260811-lead1" defer></script>
+  <script src="/assets/js/navigator.js?v=20260811-nav1" defer></script>
+</body>
+</html>

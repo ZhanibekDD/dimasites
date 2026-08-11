@@ -1,8 +1,9 @@
 <?php
 /*
- * Same-origin gateway for a single public company lookup in the official
- * "Transparent Business" service. It deliberately exposes only a small,
- * documented card and never returns FNS session, CAPTCHA or document tokens.
+ * Same-origin gateway for a public company lookup in the official
+ * "Transparent Business" service. It returns every safe field and document
+ * link from the current search response, but never returns the FNS session,
+ * CAPTCHA data or raw internal tokens.
  * Compatible with the older PHP runtime currently selected on Timeweb.
  */
 
@@ -175,6 +176,61 @@ function dnepr_row_value($row, $keys)
     return '';
 }
 
+function dnepr_document($id, $label, $url, $kind, $note)
+{
+    if ($url === null || trim((string) $url) === '') {
+        return null;
+    }
+    return array(
+        'id' => $id,
+        'label' => $label,
+        'url' => $url,
+        'kind' => $kind,
+        'note' => $note
+    );
+}
+
+function dnepr_append_document(&$documents, $document)
+{
+    if (is_array($document)) {
+        $documents[] = $document;
+    }
+}
+
+function dnepr_official_fields($row)
+{
+    $definitions = array(
+        'periodcode' => 'Отчётный период',
+        'yearcode' => 'Отчётный год',
+        'okopf12' => 'Код организационно-правовой формы',
+        'sulst_ex' => 'Код статуса юридического лица',
+        'sipst_ex' => 'Код статуса ИП',
+        'pr_liq' => 'Признак ликвидации',
+        'invalid' => 'Признак недостоверных сведений',
+        'predo' => 'Признак ранее зарегистрированного лица',
+        'okved2maintype' => 'Способ определения основного ОКВЭД',
+        'okved2main' => 'Основной ОКВЭД',
+        'okved2mainname' => 'Наименование основного ОКВЭД',
+        'okved2' => 'ОКВЭД в поисковой выдаче',
+        'okved2name' => 'Наименование ОКВЭД в поисковой выдаче',
+        'dtreg' => 'Дата регистрации',
+        'dtogrn' => 'Дата присвоения ОГРН',
+        'dtogrnip' => 'Дата присвоения ОГРНИП',
+        'regionname' => 'Регион'
+    );
+    $fields = array();
+    foreach ($definitions as $key => $label) {
+        if (isset($row[$key]) && trim((string) $row[$key]) !== '') {
+            $fields[] = array(
+                'key' => $key,
+                'label' => $label,
+                'value' => (string) $row[$key]
+            );
+        }
+    }
+    return $fields;
+}
+
 if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');
     dnepr_respond(405, array('ok' => false, 'code' => 'method_not_allowed', 'message' => 'Используйте POST-запрос.'));
@@ -282,8 +338,50 @@ foreach ($rows as $row) {
     if (!is_array($row)) {
         continue;
     }
+    $entityType = isset($row['_dneprEntityType']) ? $row['_dneprEntityType'] : 'legal_entity';
+    $documents = array();
+    $boUrl = isset($row['bourl']) ? dnepr_safe_official_url($row['bourl'], array('bo.nalog.gov.ru')) : null;
+    $smePdfUrl = isset($row['rsmppdf']) ? dnepr_safe_official_url($row['rsmppdf'], array('rmsp.nalog.ru')) : null;
+    $charterUrl = isset($row['puchdocurl']) ? dnepr_safe_official_url($row['puchdocurl'], array('service.nalog.ru')) : null;
+    $registrationUrl = isset($row['gosregurl']) ? dnepr_safe_official_url($row['gosregurl'], array('service.nalog.ru')) : null;
+    dnepr_append_document($documents, dnepr_document(
+        'registry-extract',
+        $entityType === 'entrepreneur' ? 'Выписка ЕГРИП с электронной подписью' : 'Выписка ЕГРЮЛ с электронной подписью',
+        'https://egrul.nalog.ru/index.html',
+        'official-service',
+        'Формируется бесплатно в официальном сервисе ФНС.'
+    ));
+    dnepr_append_document($documents, dnepr_document(
+        'sme-register',
+        'Выписка из реестра МСП',
+        $smePdfUrl,
+        'direct-pdf',
+        'Прямая PDF-выписка, если ссылка присутствует в ответе ФНС.'
+    ));
+    dnepr_append_document($documents, dnepr_document(
+        'accounting',
+        'Бухгалтерская отчётность',
+        $boUrl,
+        'official-card',
+        'Карточка организации в государственном ресурсе бухгалтерской отчётности.'
+    ));
+    dnepr_append_document($documents, dnepr_document(
+        'charter-copies',
+        'Учредительные документы',
+        $charterUrl,
+        'authorized-service',
+        'Копии документов доступны через официальный сервис; может потребоваться ЕСИА.'
+    ));
+    dnepr_append_document($documents, dnepr_document(
+        'registration-filings',
+        'Представленные регистрационные документы',
+        $registrationUrl,
+        'official-service',
+        'Сведения о документах, представленных для государственной регистрации.'
+    ));
+
     $companies[] = array(
-        'entityType' => isset($row['_dneprEntityType']) ? $row['_dneprEntityType'] : 'legal_entity',
+        'entityType' => $entityType,
         'shortName' => dnepr_row_value($row, array('namec', 'fio', 'namep')),
         'fullName' => dnepr_row_value($row, array('namep', 'fio', 'namec')),
         'status' => dnepr_row_value($row, array('sulst_name_ex', 'sipst_name_ex', 'statusname')),
@@ -295,11 +393,16 @@ foreach ($rows as $row) {
         'okved' => dnepr_row_value($row, array('okved2main', 'okved2')),
         'okvedName' => dnepr_row_value($row, array('okved2mainname', 'okved2name')),
         'reportingYear' => dnepr_row_value($row, array('yearcode')),
-        'boUrl' => isset($row['bourl']) ? dnepr_safe_official_url($row['bourl'], array('bo.nalog.gov.ru')) : null
+        'reportingPeriod' => dnepr_row_value($row, array('periodcode')),
+        'organizationFormCode' => dnepr_row_value($row, array('okopf12')),
+        'statusCode' => dnepr_row_value($row, array('sulst_ex', 'sipst_ex')),
+        'liquidationFlag' => dnepr_row_value($row, array('pr_liq')),
+        'invalidFlag' => dnepr_row_value($row, array('invalid')),
+        'preExistingFlag' => dnepr_row_value($row, array('predo')),
+        'mainOkvedSource' => dnepr_row_value($row, array('okved2maintype')),
+        'officialFields' => dnepr_official_fields($row),
+        'documents' => $documents
     );
-    if (count($companies) >= 5) {
-        break;
-    }
 }
 
 $payload = array(
@@ -308,6 +411,11 @@ $payload = array(
     'query' => $query,
     'total' => (isset($result['ul']['rowCount']) ? (int) $result['ul']['rowCount'] : count($legalRows))
         + (isset($result['ip']['rowCount']) ? (int) $result['ip']['rowCount'] : count($entrepreneurRows)),
+    'counts' => array(
+        'legalEntities' => isset($result['ul']['rowCount']) ? (int) $result['ul']['rowCount'] : count($legalRows),
+        'entrepreneurs' => isset($result['ip']['rowCount']) ? (int) $result['ip']['rowCount'] : count($entrepreneurRows),
+        'returned' => count($companies)
+    ),
     'companies' => $companies,
     'source' => array(
         'name' => 'ФНС России · Прозрачный бизнес',
