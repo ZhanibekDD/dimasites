@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Строительный поиск по ИНН, ЕГРЗ, закупке и участку — ГК «ДНЕПР»</title>
+  <meta name="description" content="Определите тип строительного запроса, проверьте компанию, ЕГРЗ, закупку или участок в официальных источниках и сохраните доказательный СтройПаспорт.">
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <link rel="canonical" href="https://stroydnepr.ru/proverka/poisk/">
+  <link rel="icon" href="/assets/images/logo-v2.svg" type="image/svg+xml">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="Стройпоиск ДНЕПР — официальный маршрут проверки объекта">
+  <meta property="og:description" content="ИНН, ОГРН, ЕГРЗ, закупка, кадастровый номер или адрес — одно поле и доказательный маршрут по первоисточникам.">
+  <meta property="og:url" content="https://stroydnepr.ru/proverka/poisk/">
+  <meta property="og:image" content="https://stroydnepr.ru/assets/images/hero-yard.webp">
+  <link rel="stylesheet" href="/assets/css/main.css?v=20260811-proof2">
+  <link rel="stylesheet" href="/assets/css/stroypoisk.css?v=20260811-s1">
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebApplication",
+    "name":"ДНЕПР Стройпоиск",
+    "url":"https://stroydnepr.ru/proverka/poisk/",
+    "applicationCategory":"BusinessApplication",
+    "operatingSystem":"Web browser",
+    "isAccessibleForFree":true,
+    "description":"Маршрутизатор проверки компаний, заключений ЕГРЗ, закупок и участков по официальным источникам с локальным журналом доказательств.",
+    "provider":{"@type":"Organization","name":"Группа компаний ДНЕПР","url":"https://stroydnepr.ru/"}
+  }
+  </script>
+</head>
+<body class="stroypoisk-page">
+  <a class="skip-link" href="#main">К содержанию</a>
+  <header class="site-header inner-header" data-header>
+    <div class="container header-inner">
+      <a class="brand" href="/" aria-label="ГК ДНЕПР — на главную">
+        <img class="brand-mark" src="/assets/images/logo-v2.svg" alt="" width="46" height="46">
+        <span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний · с 1992 года</span></span>
+      </a>
+      <button class="menu-button" type="button" aria-expanded="false" aria-label="Открыть меню">☰</button>
+      <nav class="main-nav" aria-label="Основная навигация">
+        <a href="/about/">Компания</a>
+        <a href="/services/">Услуги</a>
+        <a href="/projects/">Объекты</a>
+        <a href="/fleet/">Технопарк</a>
+        <a href="/proverka/">Анализ документа</a>
+        <a href="/contacts/">Контакты</a>
+        <a class="header-cta" href="#search">Начать проверку</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="search-hero">
+      <div class="search-blueprint" aria-hidden="true"><i></i><b></b><span></span></div>
+      <div class="container search-hero-inner">
+        <div class="search-copy">
+          <p class="search-kicker"><i></i> DNEPR / CONSTRUCTION INTELLIGENCE</p>
+          <h1>Один запрос.<br><em>Весь путь проверки.</em></h1>
+          <p>Введите ИНН, ОГРН, номер ЕГРЗ, закупки, кадастровый номер или адрес. Стройпоиск определит тип, проверит формат и соберёт маршрут только по официальным источникам.</p>
+          <div class="search-trust"><span>Без регистрации</span><span>Без копирования реестров</span><span>Источники уровня A*</span></div>
+        </div>
+        <aside class="search-radar" aria-label="Принцип работы">
+          <div class="radar-face" aria-hidden="true"><i></i><b></b><span></span><strong>5</strong></div>
+          <div class="radar-copy"><strong>Официальных контуров</strong><span>ФНС · ЕГРЮЛ · ЕГРЗ · ЕИС · НСПД</span></div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="search-console" id="search" aria-labelledby="search-title">
+      <div class="container">
+        <div class="console-head">
+          <div><span>01 / ЗАПРОС</span><h2 id="search-title">Что проверяем?</h2></div>
+          <p>Сайт не выдаёт отсутствие записи за отсутствие документа. Все выводы сохраняются как ваш журнал проверки.</p>
+        </div>
+        <form class="query-form" data-search-form>
+          <label class="query-field">
+            <span>Введите реквизит, адрес или название</span>
+            <input data-search-input required maxlength="240" autocomplete="off" placeholder="Например: 8906000438 или 89-1-1-3-036260-2024">
+          </label>
+          <label class="query-type">
+            <span>Тип данных</span>
+            <select data-search-type>
+              <option value="auto">Определить автоматически</option>
+              <option value="company">Компания / ИНН / ОГРН</option>
+              <option value="egrz">Заключение ЕГРЗ</option>
+              <option value="procurement">Закупка</option>
+              <option value="cadastral">Кадастровый номер</option>
+              <option value="address">Адрес или объект</option>
+            </select>
+          </label>
+          <button class="query-submit" type="submit"><span>Построить маршрут</span><b>↘</b></button>
+        </form>
+        <p class="query-error" data-search-error role="alert" hidden></p>
+        <div class="query-examples" aria-label="Примеры запросов">
+          <span>Поддерживается:</span><b>ИНН 10/12 цифр</b><b>ОГРН 13/15 цифр</b><b>ЕГРЗ</b><b>№ закупки</b><b>Кадастровый №</b><b>Адрес</b>
+        </div>
+      </div>
+    </section>
+
+    <section class="search-result" data-search-result hidden aria-labelledby="result-title">
+      <div class="container">
+        <div class="result-command">
+          <span><i></i> Маршрут построен</span>
+          <button type="button" data-search-reset>Новый запрос</button>
+        </div>
+        <div class="result-identity">
+          <div class="identity-code"><span>Тип запроса</span><strong data-result-kind></strong><small data-validation></small></div>
+          <div class="identity-main"><span>Проверяем</span><h2 id="result-title" data-result-query></h2><p data-result-intro></p></div>
+          <div class="identity-stamp" aria-hidden="true"><span>PRIMARY<br>SOURCES</span><b>A*</b></div>
+        </div>
+
+        <div class="source-section-head">
+          <div><span>02 / ПЕРВОИСТОЧНИКИ</span><h2>Доказательный маршрут</h2></div>
+          <div><strong data-source-count>0</strong><span>источника<br>для проверки</span></div>
+        </div>
+        <p class="source-disclaimer"><b>A*</b> означает официальный источник. Конкретный факт получает уровень A только после сверки записи или подписанной выписки.</p>
+        <div class="source-routes" data-source-routes></div>
+
+        <section class="next-action" aria-labelledby="next-action-title">
+          <div class="action-map" aria-hidden="true"><span></span><i></i><b></b><em>Next<br>move</em></div>
+          <div class="action-copy">
+            <span>03 / СЛЕДУЮЩИЙ ШАГ</span>
+            <h2 id="next-action-title" data-action-title>Получить строительный профиль</h2>
+            <p>Рекомендуемая компетенция «ДНЕПРА»: <strong data-action-service>Квалификация компании и партнёрство</strong>.</p>
+          </div>
+          <label class="stage-select"><span>Что уже есть по проекту?</span><select data-project-stage>
+            <option value="company">Только компания или идея</option>
+            <option value="parcel">Есть участок</option>
+            <option value="concept">Есть техническая задача</option>
+            <option value="design">Есть проектная документация</option>
+            <option value="expertise">Есть положительная экспертиза</option>
+            <option value="permit">Есть разрешение</option>
+            <option value="refusal">Есть отказ или замечания</option>
+            <option value="construction">Строительство началось</option>
+            <option value="operation">Объект введён</option>
+          </select></label>
+        </section>
+
+        <section class="passport-export" aria-labelledby="passport-title">
+          <div><span>04 / СТРОЙПАСПОРТ</span><h2 id="passport-title">Сохраните доказательства</h2><p>Статусы, даты, ссылки и ваши заметки сохраняются только в этом браузере. Скачайте копию, чтобы приложить её к задаче или передать инженеру.</p></div>
+          <div class="passport-actions"><button type="button" data-export-passport-html>Отчёт HTML <span>↗</span></button><button type="button" data-export-passport-json>Данные JSON <span>↗</span></button></div>
+        </section>
+
+        <section class="search-lead" aria-labelledby="search-lead-title">
+          <div><span>05 / ИНЖЕНЕРНЫЙ КОНТАКТ</span><h2 id="search-lead-title">Передать маршрут «ДНЕПРУ»</h2><p>Отправим контакты, ваш запрос и отмеченные статусы. Специалист проверит первоисточники и предложит следующий инженерный шаг.</p></div>
+          <form action="/contact.php" method="post" data-contact-form data-search-lead-form>
+            <div class="search-form-grid">
+              <div class="field"><label for="search-name">Имя *</label><input id="search-name" name="name" autocomplete="name" required maxlength="80"></div>
+              <div class="field"><label for="search-phone">Телефон *</label><input id="search-phone" name="phone" type="tel" autocomplete="tel" required maxlength="30"></div>
+              <div class="field"><label for="search-company">Компания</label><input id="search-company" name="company" autocomplete="organization" maxlength="120"></div>
+              <div class="field"><label for="search-email">E-mail</label><input id="search-email" name="email" type="email" autocomplete="email" maxlength="160"></div>
+            </div>
+            <textarea name="message" data-search-lead-message hidden>Заявка после Стройпоиска</textarea>
+            <input type="hidden" name="source" value="ДНЕПР Стройпоиск">
+            <div class="honeypot" aria-hidden="true"><label for="search-website">Сайт</label><input id="search-website" name="website" tabindex="-1" autocomplete="off"></div>
+            <label class="consent consent--dark"><input name="consent" type="checkbox" value="1" required><span>Согласен на обработку контактных данных согласно <a href="/privacy/" target="_blank" rel="noopener">политике</a>.</span></label>
+            <button class="button button-primary form-submit" type="submit">Запросить инженерную проверку <span class="arrow">↗</span></button>
+            <p class="form-status" role="status" aria-live="polite"></p>
+          </form>
+        </section>
+      </div>
+    </section>
+
+    <section class="search-history-section" aria-labelledby="history-title">
+      <div class="container history-grid">
+        <div><span>ЛОКАЛЬНЫЙ ЖУРНАЛ</span><h2 id="history-title">Продолжить проверку</h2><p>Записи остаются только на этом устройстве. Сервер «ДНЕПРА» не получает историю автоматически.</p></div>
+        <div class="history-list" data-search-history></div>
+        <p class="history-empty" data-history-empty>Здесь появятся ваши запросы и отмеченные источники.</p>
+      </div>
+    </section>
+
+    <section class="search-principles" aria-labelledby="principles-title">
+      <div class="container">
+        <div class="principles-head"><span>ПРИНЦИП ДОКАЗУЕМОСТИ</span><h2 id="principles-title">Честнее обычного агрегатора</h2></div>
+        <div class="principles-grid">
+          <article><b>01</b><h3>Первичный источник</h3><p>Каждый маршрут ведёт на официальный государственный ресурс, а не на скопированную карточку.</p></article>
+          <article><b>02</b><h3>Дата проверки</h3><p>Статус фиксируется вместе со временем. Старый результат не выдаётся за актуальный.</p></article>
+          <article><b>03</b><h3>Без ложного отрицания</h3><p>«Не найдено» относится только к конкретному источнику и моменту проверки.</p></article>
+          <article><b>04</b><h3>Человек подтверждает</h3><p>Официальный факт становится уровнем A после сверки записи или выписки.</p></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container"><div class="footer-main">
+      <div class="footer-about"><a class="brand" href="/"><img class="brand-mark" src="/assets/images/logo-v2.svg" alt="" width="46" height="46"><span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний</span></span></a><p>Промышленное строительство и проектирование.</p></div>
+      <div class="footer-column"><h3>Инструменты</h3><nav><a href="/proverka/poisk/">Стройпоиск</a><a href="/proverka/">Анализ документа</a></nav></div>
+      <div class="footer-column"><h3>Компания</h3><nav><a href="/about/">О компании</a><a href="/projects/">Объекты</a></nav></div>
+      <div class="footer-column"><h3>Контакты</h3><address><a href="tel:+73496453002">+7 (3496) 45-30-02</a><a href="mailto:office@stroydnepr.ru">office@stroydnepr.ru</a></address></div>
+    </div><div class="footer-bottom"><span>© 1992–2026 ООО «ДНЕПР»</span><a href="/privacy/">Политика конфиденциальности</a></div></div>
+  </footer>
+  <script src="/assets/js/main.js?v=20260811-proof2" defer></script>
+  <script src="/assets/js/stroypoisk.bundle.js?v=20260811-s1" defer></script>
+</body>
+</html>
