@@ -15,7 +15,7 @@
   <meta property="og:url" content="https://stroydnepr.ru/proverka/poisk/">
   <meta property="og:image" content="https://stroydnepr.ru/assets/images/hero-yard.webp">
   <link rel="stylesheet" href="/assets/css/main.css?v=20260811-proof2">
-  <link rel="stylesheet" href="/assets/css/stroypoisk.css?v=20260811-s1">
+  <link rel="stylesheet" href="/assets/css/stroypoisk.css?v=20260811-fns1">
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -58,8 +58,8 @@
         <div class="search-copy">
           <p class="search-kicker"><i></i> DNEPR / CONSTRUCTION INTELLIGENCE</p>
           <h1>Один запрос.<br><em>Весь путь проверки.</em></h1>
-          <p>Введите ИНН, ОГРН, номер ЕГРЗ, закупки, кадастровый номер или адрес. Стройпоиск определит тип, проверит формат и соберёт маршрут только по официальным источникам.</p>
-          <div class="search-trust"><span>Без регистрации</span><span>Без копирования реестров</span><span>Источники уровня A*</span></div>
+          <p>Введите ИНН, ОГРН, название компании, номер ЕГРЗ, закупки, кадастровый номер или адрес. Стройпоиск определит тип, а сведения о компании получит прямо из официального сервиса ФНС.</p>
+          <div class="search-trust"><span>Без регистрации</span><span>Автопроверка ФНС</span><span>Источники уровня A*</span></div>
         </div>
         <aside class="search-radar" aria-label="Принцип работы">
           <div class="radar-face" aria-hidden="true"><i></i><b></b><span></span><strong>5</strong></div>
@@ -72,7 +72,7 @@
       <div class="container">
         <div class="console-head">
           <div><span>01 / ЗАПРОС</span><h2 id="search-title">Что проверяем?</h2></div>
-          <p>Сайт не выдаёт отсутствие записи за отсутствие документа. Все выводы сохраняются как ваш журнал проверки.</p>
+          <p>Для компании сайт сам запросит ФНС и покажет карточку здесь. «Не найдено» относится только к ответу подключённого источника в момент проверки.</p>
         </div>
         <form class="query-form" data-search-form>
           <label class="query-field">
@@ -93,6 +93,7 @@
           <button class="query-submit" type="submit"><span>Построить маршрут</span><b>↘</b></button>
         </form>
         <p class="query-error" data-search-error role="alert" hidden></p>
+        <p class="query-privacy">ИНН, ОГРН или название компании передаются защищённому шлюзу сайта только для запроса публичных сведений ФНС. История проверок остаётся в этом браузере.</p>
         <div class="query-examples" aria-label="Примеры запросов">
           <span>Поддерживается:</span><b>ИНН 10/12 цифр</b><b>ОГРН 13/15 цифр</b><b>ЕГРЗ</b><b>№ закупки</b><b>Кадастровый №</b><b>Адрес</b>
         </div>
@@ -110,6 +111,14 @@
           <div class="identity-main"><span>Проверяем</span><h2 id="result-title" data-result-query></h2><p data-result-intro></p></div>
           <div class="identity-stamp" aria-hidden="true"><span>PRIMARY<br>SOURCES</span><b>A*</b></div>
         </div>
+
+        <section class="company-profile" data-company-profile hidden aria-labelledby="company-profile-title" aria-live="polite">
+          <div class="company-profile-head">
+            <div><span>01.5 / ФНС В РЕАЛЬНОМ ВРЕМЕНИ</span><h2 id="company-profile-title">Карточка компании</h2></div>
+            <div class="company-profile-state" data-company-profile-state><i></i><span>Подключение к ФНС</span></div>
+          </div>
+          <div class="company-profile-body" data-company-profile-body></div>
+        </section>
 
         <div class="source-section-head">
           <div><span>02 / ПЕРВОИСТОЧНИКИ</span><h2>Доказательный маршрут</h2></div>
@@ -193,6 +202,6 @@
     </div><div class="footer-bottom"><span>© 1992–2026 ООО «ДНЕПР»</span><a href="/privacy/">Политика конфиденциальности</a></div></div>
   </footer>
   <script src="/assets/js/main.js?v=20260811-proof2" defer></script>
-  <script src="/assets/js/stroypoisk.bundle.js?v=20260811-s1" defer></script>
+  <script src="/assets/js/stroypoisk.bundle.js?v=20260811-fns1" defer></script>
 </body>
 </html>
