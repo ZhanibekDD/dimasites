@@ -154,9 +154,15 @@ usort($leads, 'lead_sort');
 if (count($leads) > 5000) { $leads = array_slice($leads, 0, 5000); }
 $statusRecords = ledger_lines($privateDirectory . '/lead-status-*.jsonl');
 $states = array();
-foreach (array_reverse($statusRecords) as $statusRecord) {
+$stateTimes = array();
+foreach ($statusRecords as $statusRecord) {
     if (isset($statusRecord['lead_id']) && isset($statusRecord['state'])) {
-        $states[$statusRecord['lead_id']] = $statusRecord['state'];
+        $statusLeadId = $statusRecord['lead_id'];
+        $statusTime = isset($statusRecord['updated_at']) ? strtotime($statusRecord['updated_at']) : 0;
+        if (!isset($stateTimes[$statusLeadId]) || $statusTime >= $stateTimes[$statusLeadId]) {
+            $states[$statusLeadId] = $statusRecord['state'];
+            $stateTimes[$statusLeadId] = $statusTime;
+        }
     }
 }
 
