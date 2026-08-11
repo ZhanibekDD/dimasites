@@ -15,6 +15,23 @@ function h($value)
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 }
 
+function csv_safe_value($value)
+{
+    $value = (string)$value;
+    $trimmed = ltrim($value);
+    if ($trimmed !== '' && preg_match('/^[=+\-@]/', $trimmed)) {
+        return "'" . $value;
+    }
+    return $value;
+}
+
+function csv_safe_row($values)
+{
+    $safe = array();
+    foreach ($values as $value) { $safe[] = csv_safe_value($value); }
+    return $safe;
+}
+
 function secure_equals_legacy($known, $provided)
 {
     $known = (string)$known;
@@ -274,20 +291,25 @@ if (isset($_GET['format']) && $_GET['format'] === 'sources') {
     header('Content-Disposition: attachment; filename="dnepr-source-queries-' . date('Y-m-d') . '.csv"');
     echo "\xEF\xBB\xBF";
     $output = fopen('php://output', 'w');
-    fputcsv($output, array('Дата', 'Источник', 'Запрос', 'Статус', 'Результатов', 'HTTP', 'Время, мс', 'Код диагностики', 'Код ошибки', 'Сообщение'), ';');
+    fputcsv($output, array('Дата', 'Источник', 'Запрос', 'Статус', 'Результатов', 'HTTP', 'cURL', 'Этап', 'Время, мс', 'Тип ответа', 'Байт', 'Хэш ответа', 'Код диагностики', 'Код ошибки', 'Сообщение'), ';');
     foreach ($sourceQueries as $sourceQuery) {
-        fputcsv($output, array(
+        fputcsv($output, csv_safe_row(array(
             isset($sourceQuery['created_at']) ? $sourceQuery['created_at'] : '',
             isset($sourceQuery['source']) ? strtoupper($sourceQuery['source']) : '',
             isset($sourceQuery['query']) ? $sourceQuery['query'] : '',
             isset($sourceQuery['state']) ? $sourceQuery['state'] : '',
             isset($sourceQuery['result_count']) ? $sourceQuery['result_count'] : '',
             isset($sourceQuery['http_status']) ? $sourceQuery['http_status'] : '',
+            isset($sourceQuery['curl_code']) ? $sourceQuery['curl_code'] : '',
+            isset($sourceQuery['stage']) ? $sourceQuery['stage'] : '',
             isset($sourceQuery['latency_ms']) ? $sourceQuery['latency_ms'] : '',
+            isset($sourceQuery['content_type']) ? $sourceQuery['content_type'] : '',
+            isset($sourceQuery['body_bytes']) ? $sourceQuery['body_bytes'] : '',
+            isset($sourceQuery['body_hash']) ? $sourceQuery['body_hash'] : '',
             isset($sourceQuery['diagnostic_id']) ? $sourceQuery['diagnostic_id'] : '',
             isset($sourceQuery['error_code']) ? $sourceQuery['error_code'] : '',
             isset($sourceQuery['message']) ? $sourceQuery['message'] : ''
-        ), ';');
+        )), ';');
     }
     fclose($output);
     exit;
@@ -301,7 +323,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
     fputcsv($output, array('ID', 'Дата', 'Статус', 'Приоритет', 'Score', 'SLA', 'Имя', 'Телефон', 'Компания', 'E-mail', 'Источник', 'Страница', 'UTM source', 'UTM campaign', 'Задача'), ';');
     foreach ($leads as $lead) {
         $id = isset($lead['id']) ? $lead['id'] : '';
-        fputcsv($output, array(
+        fputcsv($output, csv_safe_row(array(
             $id,
             isset($lead['created_at']) ? $lead['created_at'] : '',
             state_label(isset($states[$id]) ? $states[$id] : 'new'),
@@ -317,7 +339,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
             isset($lead['utm_source']) ? $lead['utm_source'] : '',
             isset($lead['utm_campaign']) ? $lead['utm_campaign'] : '',
             isset($lead['message']) ? $lead['message'] : ''
-        ), ';');
+        )), ';');
     }
     fclose($output);
     exit;
@@ -375,7 +397,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
         ?>
           <article class="source-query source-state-<?php echo h($sourceState); ?>">
             <div><span><?php echo h(isset($sourceQuery['source']) ? strtoupper($sourceQuery['source']) : 'SOURCE'); ?></span><strong><?php echo h(isset($sourceQuery['query']) ? $sourceQuery['query'] : '—'); ?></strong><small><?php echo $sourceCreated ? h(date('d.m.Y H:i:s', $sourceCreated)) : '—'; ?></small></div>
-            <dl><div><dt>Статус</dt><dd><?php echo h($sourceState === 'found' ? 'Найдено' : ($sourceState === 'missing' ? 'Нет записей в ответе' : 'Источник недоступен')); ?></dd></div><div><dt>Результатов</dt><dd><?php echo h(isset($sourceQuery['result_count']) ? $sourceQuery['result_count'] : 0); ?></dd></div><div><dt>HTTP / время</dt><dd><?php echo h(isset($sourceQuery['http_status']) ? $sourceQuery['http_status'] : 0); ?> · <?php echo h(isset($sourceQuery['latency_ms']) ? $sourceQuery['latency_ms'] : 0); ?> мс</dd></div><div><dt>Диагностика</dt><dd><?php echo h(isset($sourceQuery['diagnostic_id']) ? $sourceQuery['diagnostic_id'] : '—'); ?></dd></div></dl>
+            <dl><div><dt>Статус</dt><dd><?php echo h($sourceState === 'found' ? 'Найдено' : ($sourceState === 'missing' ? 'Нет записей в ответе' : 'Источник недоступен')); ?></dd></div><div><dt>Результатов</dt><dd><?php echo h(isset($sourceQuery['result_count']) ? $sourceQuery['result_count'] : 0); ?></dd></div><div><dt>HTTP / время</dt><dd><?php echo h(isset($sourceQuery['http_status']) ? $sourceQuery['http_status'] : 0); ?> · <?php echo h(isset($sourceQuery['latency_ms']) ? $sourceQuery['latency_ms'] : 0); ?> мс</dd></div><div><dt>Этап / cURL</dt><dd><?php echo h(isset($sourceQuery['stage']) && $sourceQuery['stage'] !== '' ? $sourceQuery['stage'] : '—'); ?> · <?php echo h(isset($sourceQuery['curl_code']) ? $sourceQuery['curl_code'] : 0); ?></dd></div><div><dt>Ответ</dt><dd><?php echo h(isset($sourceQuery['content_type']) && $sourceQuery['content_type'] !== '' ? $sourceQuery['content_type'] : '—'); ?> · <?php echo h(isset($sourceQuery['body_bytes']) ? $sourceQuery['body_bytes'] : 0); ?> Б</dd></div><div><dt>Диагностика</dt><dd><?php echo h(isset($sourceQuery['diagnostic_id']) ? $sourceQuery['diagnostic_id'] : '—'); ?></dd></div></dl>
             <?php if (!empty($sourceQuery['message']) || !empty($sourceQuery['error_code'])): ?><p><?php echo h(trim((isset($sourceQuery['error_code']) ? $sourceQuery['error_code'] : '') . ' · ' . (isset($sourceQuery['message']) ? $sourceQuery['message'] : ''), ' ·')); ?></p><?php endif; ?>
             <?php if (!empty($sourceQuery['results']) && is_array($sourceQuery['results'])): ?>
               <div class="source-query-results"><span>ЗАПИСИ ИЗ ОТВЕТА</span><?php foreach ($sourceQuery['results'] as $sourceResult):
