@@ -93,12 +93,12 @@ if "+7 (3496) 43-57-67" in contact_gateway:
     errors.append("contact.php: obsolete fallback phone remains")
 
 admin_gateway = (ROOT / "admin" / "index.php").read_text(encoding="utf-8")
-for marker in ("secure_equals_legacy", "load_admin_config", "admin.json", "dnepr-private", "lead-status-", "format'] === 'csv'", "noindex"):
+for marker in ("secure_equals_legacy", "load_admin_config", ".access.php", "admin.json", "dnepr-private", "lead-status-", "format'] === 'csv'", "noindex"):
     if marker not in admin_gateway:
         errors.append(f"admin/index.php: missing protected lead console marker {marker}")
 
 admin_setup = (ROOT.parent / "scripts" / "timeweb_setup_admin.sh").read_text(encoding="utf-8")
-for marker in ("/dev/urandom", "admin.json", "password_hash", "chmod 0600", "shown only once"):
+for marker in ("/dev/urandom", "admin.json", ".access.php", "password_hash", "chmod 0600", "shown only once"):
     if marker not in admin_setup:
         errors.append(f"timeweb_setup_admin.sh: missing secure setup marker {marker}")
 
