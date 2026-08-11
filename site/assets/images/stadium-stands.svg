@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">Схема монтажа трибун городского стадиона</title>
+  <desc id="desc">Фирменная инженерная иллюстрация металлических трибун, не архивная фотография объекта.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#122533"/><stop offset="1" stop-color="#050b10"/></linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#78909d"/><stop offset="1" stop-color="#263b47"/></linearGradient>
+    <linearGradient id="snow" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset="1" stop-color="#b8cbd5"/></linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg)"/>
+  <g opacity=".16" stroke="#dbe8ee"><path d="M0 150h1200M0 250h1200M0 350h1200M0 450h1200M0 550h1200"/><path d="M120 0v800M260 0v800M400 0v800M540 0v800M680 0v800M820 0v800M960 0v800M1100 0v800"/></g>
+  <path d="M76 666h1050" stroke="#ffd429" stroke-width="7"/>
+  <g transform="translate(115 180)">
+    <path d="m70 400 650-10 250 110H0z" fill="#101d25" stroke="#5d727e" stroke-width="5"/>
+    <path d="M110 352h690l104 46H76z" fill="url(#steel)"/>
+    <path d="M150 295h570l89 40H120z" fill="url(#steel)"/>
+    <path d="M198 238h440l77 38H164z" fill="url(#steel)"/>
+    <path d="M246 182h310l75 36H212z" fill="url(#steel)"/>
+    <path d="M288 130h190l70 33H254z" fill="url(#snow)"/>
+    <g fill="#ffd429"><circle cx="196" cy="325" r="14"/><circle cx="286" cy="267" r="14"/><circle cx="374" cy="210" r="14"/><circle cx="456" cy="153" r="14"/></g>
+    <g stroke="#94a8b2" stroke-width="7"><path d="M100 398 35 500M245 392l-38 108M390 394v106M545 392l38 108M700 392l79 108M840 405l101 95"/><path d="m37 498 208-106 145 108 155-108 156 108 139-95" fill="none"/></g>
+  </g>
+  <g fill="#e6eff3" font-family="Arial,sans-serif"><text x="72" y="92" font-size="22" font-weight="800" letter-spacing="5" fill="#ffd429">МОНТАЖ · МЕТАЛЛОКОНСТРУКЦИИ</text><text x="72" y="135" font-size="18" letter-spacing="2">ИНЖЕНЕРНАЯ СХЕМА / НЕ АРХИВНОЕ ФОТО</text></g>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">Схема многофункциональной спортивной площадки</title>
+  <desc id="desc">Фирменная архитектурная иллюстрация площадки в северном городе, не архивная фотография объекта.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#19303f"/><stop offset="1" stop-color="#071119"/></linearGradient>
+    <linearGradient id="court" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#395361"/><stop offset="1" stop-color="#182832"/></linearGradient>
+    <linearGradient id="snow" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ffffff" stop-opacity=".95"/><stop offset="1" stop-color="#bfd0d9" stop-opacity=".72"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="800" fill="url(#sky)"/>
+  <path d="M0 520 360 350 1200 520v280H0z" fill="url(#snow)" opacity=".9"/>
+  <g opacity=".18" stroke="#dce9ef"><path d="M0 130h1200M0 210h1200M0 290h1200"/><path d="M120 0v420M300 0v390M900 0v390M1080 0v430"/></g>
+  <path d="m170 538 380-206 482 146-382 240z" fill="url(#court)" stroke="#6c818c" stroke-width="5"/>
+  <path d="m233 543 326-176 406 122-325 187z" fill="none" stroke="#ffd429" stroke-width="8"/>
+  <path d="m397 454 407 122M559 367l81 309" fill="none" stroke="#fff" stroke-opacity=".82" stroke-width="5"/>
+  <ellipse cx="600" cy="522" rx="84" ry="49" fill="none" stroke="#fff" stroke-opacity=".82" stroke-width="5" transform="rotate(17 600 522)"/>
+  <g fill="none" stroke="#c5d5dc" stroke-width="8"><path d="M258 480v-142h92M908 448V288h92"/><path d="M318 338v64M968 288v72"/></g>
+  <g fill="#ffd429" filter="url(#glow)"><circle cx="258" cy="328" r="10"/><circle cx="350" cy="338" r="10"/><circle cx="908" cy="278" r="10"/><circle cx="1000" cy="288" r="10"/></g>
+  <g fill="#0a151c"><path d="M0 564c130-38 216-17 322 18l-80 218H0z"/><path d="M1200 500c-122-30-223 4-305 51l125 249h180z"/></g>
+  <text x="72" y="92" fill="#ffd429" font-family="Arial,sans-serif" font-size="22" font-weight="800" letter-spacing="5">МУРАВЛЕНКО · ГОРОДСКАЯ СРЕДА</text>
+  <text x="72" y="135" fill="#dce7ec" font-family="Arial,sans-serif" font-size="18" letter-spacing="2">АРХИТЕКТУРНАЯ СХЕМА / НЕ АРХИВНОЕ ФОТО</text>
+</svg>

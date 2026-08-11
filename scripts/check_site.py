@@ -59,6 +59,7 @@ required = [
     ROOT / "sitemap.xml",
     ROOT / ".htaccess",
     ROOT / "contact.php",
+    ROOT / "api" / "fns-company.php",
     ROOT / "proverka" / "index.html",
     ROOT / "proverka" / "poisk" / "index.html",
     ROOT / "assets" / "js" / "proverka.bundle.js",
