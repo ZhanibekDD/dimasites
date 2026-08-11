@@ -120,8 +120,8 @@ function dnepr_fns_post($fields, $cookie, $withHeaders)
     curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields, '', '&'));
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, CURLOPT_HEADER, $withHeaders ? true : false);
-    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 8);
-    curl_setopt($curl, CURLOPT_TIMEOUT, 24);
+    curl_setopt($curl, CURLOPT_CONNECTTIMEOUT, 5);
+    curl_setopt($curl, CURLOPT_TIMEOUT, 12);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, false);
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
@@ -295,6 +295,139 @@ function dnepr_response_sections($response)
     return $sections;
 }
 
+function dnepr_egrul_field($value, $labels)
+{
+    $value = dnepr_source_normalize_text($value);
+    foreach ($labels as $label) {
+        if (stripos($value, $label) === 0) {
+            return trim(substr($value, strlen($label)), " \t\n\r\0\x0B:");
+        }
+    }
+    return $value;
+}
+
+function dnepr_egrul_fallback_search($query)
+{
+    $cookieFile = tempnam(sys_get_temp_dir(), 'dnepr-egrul-');
+    if ($cookieFile === false) { $cookieFile = ''; }
+    $headers = array(
+        'Accept: application/json, text/javascript, */*; q=0.01',
+        'Content-Type: application/x-www-form-urlencoded; charset=UTF-8',
+        'X-Requested-With: XMLHttpRequest',
+        'Origin: https://egrul.nalog.ru',
+        'Referer: https://egrul.nalog.ru/'
+    );
+    $started = dnepr_source_http_post('https://egrul.nalog.ru/', $headers, $cookieFile, array(
+        'vyp3CaptchaToken' => '',
+        'page' => '',
+        'query' => $query,
+        'region' => '',
+        'PreventChromeAutocomplete' => ''
+    ), 5, 12);
+    if (empty($started['ok'])) {
+        if ($cookieFile !== '') { @unlink($cookieFile); }
+        $started['stage'] = 'egrul-start';
+        return $started;
+    }
+    $task = json_decode($started['body'], true);
+    if (!is_array($task) || empty($task['t'])) {
+        if ($cookieFile !== '') { @unlink($cookieFile); }
+        return array('ok' => false, 'stage' => 'egrul-start', 'status' => $started['status'], 'errno' => 0, 'latency_ms' => $started['latency_ms'], 'error' => !empty($task['captchaRequired']) ? 'captcha_required' : 'invalid_source_response');
+    }
+    $milliseconds = (string) round(microtime(true) * 1000);
+    $resultUrl = 'https://egrul.nalog.ru/search-result/' . rawurlencode($task['t']) . '?r=' . rawurlencode($milliseconds) . '&_=' . rawurlencode($milliseconds);
+    $received = dnepr_source_http_get($resultUrl, array('Accept: application/json, text/javascript, */*; q=0.01', 'X-Requested-With: XMLHttpRequest', 'Referer: https://egrul.nalog.ru/'), $cookieFile, 5, 12);
+    if ($cookieFile !== '') { @unlink($cookieFile); }
+    if (empty($received['ok'])) {
+        $received['stage'] = 'egrul-result';
+        return $received;
+    }
+    $decoded = json_decode($received['body'], true);
+    if (!is_array($decoded) || !isset($decoded['rows']) || !is_array($decoded['rows'])) {
+        return array('ok' => false, 'stage' => 'egrul-result', 'status' => $received['status'], 'errno' => 0, 'latency_ms' => $started['latency_ms'] + $received['latency_ms'], 'error' => 'invalid_source_response');
+    }
+    return array('ok' => true, 'stage' => 'egrul-result', 'status' => $received['status'], 'errno' => 0, 'latency_ms' => $started['latency_ms'] + $received['latency_ms'], 'rows' => $decoded['rows'], 'content_type' => isset($received['content_type']) ? $received['content_type'] : '', 'body_bytes' => isset($received['body_bytes']) ? $received['body_bytes'] : 0, 'body_hash' => isset($received['body_hash']) ? $received['body_hash'] : '');
+}
+
+function dnepr_egrul_fallback_payload($query, $diagnosticId, $fallback)
+{
+    $companies = array();
+    $safeRows = array();
+    $legalCount = 0;
+    $entrepreneurCount = 0;
+    foreach (array_slice($fallback['rows'], 0, 10) as $row) {
+        if (!is_array($row)) { continue; }
+        $shortName = isset($row['n']) ? dnepr_source_normalize_text($row['n']) : '';
+        $inn = isset($row['i']) ? dnepr_egrul_field($row['i'], array('ИНН')) : '';
+        $ogrn = isset($row['o']) ? dnepr_egrul_field($row['o'], array('ОГРН', 'ОГРНИП')) : '';
+        $kpp = isset($row['k']) ? dnepr_egrul_field($row['k'], array('КПП')) : '';
+        $registeredAt = isset($row['r']) ? dnepr_egrul_field($row['r'], array('Дата присвоения ОГРН', 'Дата присвоения ОГРНИП')) : '';
+        $ceasedAt = isset($row['e']) ? dnepr_egrul_field($row['e'], array('Дата прекращения деятельности')) : '';
+        $address = isset($row['a']) ? dnepr_source_normalize_text($row['a']) : '';
+        $manager = isset($row['g']) ? dnepr_source_normalize_text($row['g']) : '';
+        $entityType = strlen($ogrn) === 15 ? 'entrepreneur' : 'legal_entity';
+        if ($entityType === 'entrepreneur') { $entrepreneurCount += 1; }
+        else { $legalCount += 1; }
+        $status = $ceasedAt === '' ? 'Действующая запись ЕГРЮЛ / ЕГРИП' : 'Деятельность прекращена: ' . $ceasedAt;
+        $officialFields = array();
+        foreach (array(
+            array('name', 'Наименование', $shortName), array('inn', 'ИНН', $inn), array('ogrn', $entityType === 'entrepreneur' ? 'ОГРНИП' : 'ОГРН', $ogrn),
+            array('kpp', 'КПП', $kpp), array('registered_at', 'Дата присвоения ОГРН / ОГРНИП', $registeredAt), array('status', 'Статус', $status),
+            array('address', 'Адрес', $address), array('manager', 'Руководитель / сведения о лице', $manager)
+        ) as $field) {
+            if ($field[2] !== '') { $officialFields[] = array('key' => $field[0], 'label' => $field[1], 'value' => $field[2]); }
+        }
+        $documents = array(dnepr_document('registry-extract', $entityType === 'entrepreneur' ? 'Выписка ЕГРИП с электронной подписью' : 'Выписка ЕГРЮЛ с электронной подписью', 'https://egrul.nalog.ru/index.html', 'official-service', 'Формируется бесплатно в официальном сервисе ФНС.'));
+        $companies[] = array(
+            'entityType' => $entityType, 'shortName' => $shortName, 'fullName' => $shortName, 'status' => $status,
+            'inn' => $inn, 'ogrn' => $ogrn, 'kpp' => $kpp, 'registeredAt' => $registeredAt,
+            'address' => $address, 'manager' => $manager, 'officialFields' => $officialFields, 'documents' => $documents
+        );
+        $safeRows[] = array('name' => $shortName, 'inn' => $inn, 'ogrn' => $ogrn, 'kpp' => $kpp, 'registeredAt' => $registeredAt, 'status' => $status, 'address' => $address, 'manager' => $manager);
+    }
+    return array(
+        'ok' => true,
+        'found' => count($companies) > 0,
+        'partial' => true,
+        'query' => $query,
+        'total' => count($fallback['rows']),
+        'counts' => array('legalEntities' => $legalCount, 'entrepreneurs' => $entrepreneurCount, 'returned' => count($companies)),
+        'companies' => $companies,
+        'responseSections' => array(array('id' => 'egrul', 'label' => 'Результаты ЕГРЮЛ / ЕГРИП', 'rowCount' => count($fallback['rows']), 'returned' => count($safeRows), 'hasMore' => count($fallback['rows']) > count($safeRows), 'records' => $safeRows)),
+        'source' => array('name' => 'ФНС России · ЕГРЮЛ / ЕГРИП', 'url' => 'https://egrul.nalog.ru/', 'retrievedAt' => gmdate('c'), 'cached' => false, 'fallback' => true, 'diagnosticId' => $diagnosticId),
+        'disclaimer' => 'Основной сервис «Прозрачный бизнес» не ответил. Показан резервный официальный ответ ЕГРЮЛ / ЕГРИП. Для полного профиля повторите проверку позднее; для юридически значимого решения сформируйте подписанную выписку.'
+    );
+}
+
+function dnepr_finish_with_egrul_fallback($query, $diagnosticId, $primaryStage, $primary)
+{
+    $fallback = dnepr_egrul_fallback_search($query);
+    if (!empty($fallback['ok'])) {
+        $payload = dnepr_egrul_fallback_payload($query, $diagnosticId, $fallback);
+        $companies = isset($payload['companies']) ? $payload['companies'] : array();
+        dnepr_source_log('fns', $query, count($companies) > 0 ? 'found' : 'missing', $diagnosticId, array(
+            'result_count' => count($companies), 'http_status' => $fallback['status'], 'latency_ms' => $fallback['latency_ms'],
+            'stage' => 'egrul-fallback', 'message' => 'Основной поиск ФНС недоступен; использован официальный резерв ЕГРЮЛ / ЕГРИП.',
+            'results' => $companies, 'content_type' => isset($fallback['content_type']) ? $fallback['content_type'] : '',
+            'body_bytes' => isset($fallback['body_bytes']) ? $fallback['body_bytes'] : 0, 'body_hash' => isset($fallback['body_hash']) ? $fallback['body_hash'] : ''
+        ));
+        dnepr_cache_write($query, $payload);
+        dnepr_respond(200, $payload);
+    }
+    $message = 'Сервисы ФНС не ответили: основной «Прозрачный бизнес» и резервный ЕГРЮЛ / ЕГРИП.';
+    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array(
+        'http_status' => isset($fallback['status']) ? $fallback['status'] : 0,
+        'latency_ms' => (isset($primary['latency_ms']) ? $primary['latency_ms'] : 0) + (isset($fallback['latency_ms']) ? $fallback['latency_ms'] : 0),
+        'curl_code' => isset($fallback['errno']) ? $fallback['errno'] : 0,
+        'stage' => $primaryStage . '+' . (isset($fallback['stage']) ? $fallback['stage'] : 'egrul'),
+        'error_code' => 'all_fns_sources_unavailable', 'message' => $message
+    ));
+    dnepr_respond(502, array('ok' => false, 'code' => 'all_fns_sources_unavailable', 'message' => $message, 'diagnosticId' => $diagnosticId, 'technical' => array(
+        'primary' => array('stage' => $primaryStage, 'httpStatus' => isset($primary['status']) ? $primary['status'] : 0, 'curlCode' => isset($primary['errno']) ? $primary['errno'] : 0),
+        'fallback' => array('stage' => isset($fallback['stage']) ? $fallback['stage'] : 'egrul', 'httpStatus' => isset($fallback['status']) ? $fallback['status'] : 0, 'curlCode' => isset($fallback['errno']) ? $fallback['errno'] : 0)
+    )));
+}
+
 if (!isset($_SERVER['REQUEST_METHOD']) || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Allow: POST');
     dnepr_respond(405, array('ok' => false, 'code' => 'method_not_allowed', 'message' => 'Используйте POST-запрос.'));
@@ -350,17 +483,14 @@ $searchFields = array(
 
 $started = dnepr_fns_post($searchFields, '', true);
 if (empty($started['ok'])) {
-    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => $started['status'], 'latency_ms' => $started['latency_ms'], 'error_code' => 'source_unavailable', 'message' => $started['error']));
-    dnepr_respond(502, array('ok' => false, 'code' => 'source_unavailable', 'message' => $started['error'], 'diagnosticId' => $diagnosticId, 'technical' => array('stage' => 'start-search', 'httpStatus' => $started['status'], 'curlCode' => $started['errno'])));
+    dnepr_finish_with_egrul_fallback($query, $diagnosticId, 'pb-start', $started);
 }
 $task = json_decode($started['body'], true);
 if (!is_array($task) || empty($task['id'])) {
-    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => $started['status'], 'latency_ms' => $started['latency_ms'], 'error_code' => 'invalid_source_response', 'message' => 'ФНС вернула неожиданный ответ.'));
-    dnepr_respond(502, array('ok' => false, 'code' => 'invalid_source_response', 'message' => 'ФНС вернула неожиданный ответ.', 'diagnosticId' => $diagnosticId));
+    dnepr_finish_with_egrul_fallback($query, $diagnosticId, 'pb-task', array('status' => $started['status'], 'errno' => 0, 'latency_ms' => $started['latency_ms']));
 }
 if (!empty($task['captchaRequired'])) {
-    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => 200, 'latency_ms' => $started['latency_ms'], 'error_code' => 'captcha_required', 'message' => 'ФНС запросила ручную проверку.'));
-    dnepr_respond(503, array('ok' => false, 'code' => 'captcha_required', 'message' => 'ФНС запросила ручную проверку. Откройте официальный сервис для продолжения.', 'diagnosticId' => $diagnosticId));
+    dnepr_finish_with_egrul_fallback($query, $diagnosticId, 'pb-captcha', array('status' => 200, 'errno' => 0, 'latency_ms' => $started['latency_ms']));
 }
 
 $cookie = '';
@@ -368,8 +498,7 @@ if (preg_match_all('/^Set-Cookie:\s*(JSESSIONID=[^;\r\n]+)/mi', $started['header
     $cookie = $matches[1][count($matches[1]) - 1];
 }
 if ($cookie === '') {
-    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => 200, 'latency_ms' => $started['latency_ms'], 'error_code' => 'session_missing', 'message' => 'Не удалось создать защищённую сессию ФНС.'));
-    dnepr_respond(502, array('ok' => false, 'code' => 'session_missing', 'message' => 'Не удалось создать защищённую сессию ФНС.', 'diagnosticId' => $diagnosticId));
+    dnepr_finish_with_egrul_fallback($query, $diagnosticId, 'pb-session', array('status' => 200, 'errno' => 0, 'latency_ms' => $started['latency_ms']));
 }
 
 $result = null;
@@ -378,8 +507,7 @@ for ($attempt = 0; $attempt < 5; $attempt += 1) {
     $received = dnepr_fns_post(array('id' => $task['id'], 'method' => 'get-response'), $cookie, false);
     if (empty($received['ok'])) {
         if ($attempt === 4) {
-            dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => $received['status'], 'latency_ms' => $received['latency_ms'], 'error_code' => 'source_unavailable', 'message' => $received['error']));
-            dnepr_respond(502, array('ok' => false, 'code' => 'source_unavailable', 'message' => $received['error'], 'diagnosticId' => $diagnosticId, 'technical' => array('stage' => 'receive-response', 'httpStatus' => $received['status'], 'curlCode' => $received['errno'])));
+            dnepr_finish_with_egrul_fallback($query, $diagnosticId, 'pb-result', $received);
         }
         continue;
     }
@@ -390,8 +518,7 @@ for ($attempt = 0; $attempt < 5; $attempt += 1) {
     }
 }
 if ($result === null) {
-    dnepr_source_log('fns', $query, 'unavailable', $diagnosticId, array('http_status' => 200, 'latency_ms' => 0, 'error_code' => 'source_timeout', 'message' => 'ФНС не успела подготовить ответ.'));
-    dnepr_respond(502, array('ok' => false, 'code' => 'source_timeout', 'message' => 'ФНС не успела подготовить ответ. Повторите проверку.', 'diagnosticId' => $diagnosticId));
+    dnepr_finish_with_egrul_fallback($query, $diagnosticId, 'pb-timeout', array('status' => 200, 'errno' => 28, 'latency_ms' => 0));
 }
 
 $legalRows = isset($result['ul']['data']) && is_array($result['ul']['data']) ? $result['ul']['data'] : array();
