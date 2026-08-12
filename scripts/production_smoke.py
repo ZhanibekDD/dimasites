@@ -13,7 +13,7 @@ import urllib.request
 
 DEFAULT_FNS_INN = "8906000438"
 DEFAULT_EGRZ_NUMBER = "77-1-1-2-012149-2025"
-DEFAULT_EIS_QUERY = "строительство"
+DEFAULT_EIS_NUMBER = "0372200102526000003"
 
 
 class SmokeFailure(RuntimeError):
@@ -103,9 +103,16 @@ def retry_json(client, endpoint, payload, timeout, attempts):
             status, body = client.request(endpoint, payload, timeout)
             if status < 500:
                 return status, body
+            technical = body.get("technical", {})
             last_error = SmokeFailure(
-                "HTTP %s, code=%s, diagnostic=%s"
-                % (status, body.get("code", ""), body.get("diagnosticId", ""))
+                "HTTP %s, code=%s, diagnostic=%s, message=%s, technical=%s"
+                % (
+                    status,
+                    body.get("code", ""),
+                    body.get("diagnosticId", ""),
+                    body.get("message", ""),
+                    json.dumps(technical, ensure_ascii=False, sort_keys=True),
+                )
             )
         except SmokeFailure as exc:
             last_error = exc
@@ -147,6 +154,14 @@ def check_fns(client, inn, timeout, attempts):
         raise SmokeFailure("FNS response did not contain the requested INN")
     source = body.get("source", {})
     print("PASS FNS: INN %s, source=%s" % (inn, source.get("name", "unknown")))
+    return {
+        "source": "fns",
+        "query": inn,
+        "found": True,
+        "result_count": len(body.get("companies", [])),
+        "provider": source.get("name", "unknown"),
+        "diagnostic_id": body.get("diagnosticId", ""),
+    }
 
 
 def check_registry(client, source, query, timeout, attempts, expected_number=None):
@@ -179,6 +194,13 @@ def check_registry(client, source, query, timeout, attempts, expected_number=Non
                 % (source.upper(), expected_number, sorted(numbers))
             )
     print("PASS %s: %s verified result(s)" % (source.upper(), len(results)))
+    return {
+        "source": source,
+        "query": query,
+        "found": True,
+        "result_count": len(results),
+        "diagnostic_id": body.get("diagnosticId", ""),
+    }
 
 
 def check_release(client, expected_version, timeout):
@@ -189,6 +211,41 @@ def check_release(client, expected_version, timeout):
             "release mismatch: expected %s, got %s" % (expected_version, actual or "<empty>")
         )
     print("PASS RELEASE: %s" % actual)
+    return {"source": "release", "version": actual}
+
+
+def execute_check(name, callback, args):
+    started = time.time()
+    try:
+        details = callback(*args)
+        return {
+            "name": name,
+            "status": "pass",
+            "duration_ms": int(round((time.time() - started) * 1000)),
+            "details": details,
+        }
+    except SmokeFailure as exc:
+        message = str(exc)
+        print("FAIL %s: %s" % (name, message), file=sys.stderr)
+        return {
+            "name": name,
+            "status": "fail",
+            "duration_ms": int(round((time.time() - started) * 1000)),
+            "error": message,
+        }
+
+
+def write_report(path, report):
+    if not path:
+        return
+    directory = os.path.dirname(os.path.abspath(path))
+    if directory and not os.path.isdir(directory):
+        os.makedirs(directory)
+    temporary = path + ".tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(report, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.write("\n")
+    os.replace(temporary, path)
 
 
 def main():
@@ -200,29 +257,67 @@ def main():
     parser.add_argument("--expected-version", default="")
     parser.add_argument("--fns-inn", default=DEFAULT_FNS_INN)
     parser.add_argument("--egrz-number", default=DEFAULT_EGRZ_NUMBER)
-    parser.add_argument("--eis-query", default=DEFAULT_EIS_QUERY)
+    parser.add_argument("--eis-number", default=DEFAULT_EIS_NUMBER)
     parser.add_argument("--timeout", type=int, default=70)
     parser.add_argument("--attempts", type=int, default=2)
     parser.add_argument("--release-only", action="store_true")
+    parser.add_argument("--report-json", default="")
     args = parser.parse_args()
 
     client = GatewayClient(args.base_url or "", args.document_root or "", args.php_bin)
-    try:
-        if args.expected_version:
-            check_release(client, args.expected_version, min(args.timeout, 30))
-        if not args.release_only:
-            check_fns(client, args.fns_inn, args.timeout, args.attempts)
-            check_registry(
-                client,
-                "egrz",
-                args.egrz_number,
-                args.timeout,
-                args.attempts,
-                expected_number=args.egrz_number,
-            )
-            check_registry(client, "eis", args.eis_query, args.timeout, args.attempts)
-    except SmokeFailure as exc:
-        print("FAIL: %s" % exc, file=sys.stderr)
+    checks = []
+    if args.expected_version:
+        checks.append(
+            ("RELEASE", check_release, (client, args.expected_version, min(args.timeout, 30)))
+        )
+    if not args.release_only:
+        # Every source is checked independently. A broken EGRZ adapter must never
+        # hide the actual FNS or EIS state from the deployment report.
+        checks.extend(
+            [
+                ("FNS", check_fns, (client, args.fns_inn, args.timeout, args.attempts)),
+                (
+                    "EGRZ",
+                    check_registry,
+                    (
+                        client,
+                        "egrz",
+                        args.egrz_number,
+                        args.timeout,
+                        args.attempts,
+                        args.egrz_number,
+                    ),
+                ),
+                (
+                    "EIS",
+                    check_registry,
+                    (
+                        client,
+                        "eis",
+                        args.eis_number,
+                        args.timeout,
+                        args.attempts,
+                        args.eis_number,
+                    ),
+                ),
+            ]
+        )
+
+    results = [execute_check(name, callback, values) for name, callback, values in checks]
+    report = {
+        "schema": "dnepr-source-gate/1.0",
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "target": args.base_url or args.document_root,
+        "passed": all(item["status"] == "pass" for item in results),
+        "checks": results,
+    }
+    write_report(args.report_json, report)
+
+    passed = [item["name"] for item in results if item["status"] == "pass"]
+    failed = [item["name"] for item in results if item["status"] == "fail"]
+    print("SOURCE GATE SUMMARY: pass=%s fail=%s" % (",".join(passed) or "-", ",".join(failed) or "-"))
+    if failed:
+        print("Release gate failed. All configured sources were tested; see the report above.", file=sys.stderr)
         return 1
     print("All release-gate checks passed.")
     return 0
