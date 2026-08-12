@@ -20,6 +20,7 @@ if (!function_exists('curl_init')) {
 function probe_fetch($url, $timeout, $method = 'GET', $fields = array(), $extraHeaders = array())
 {
     $curl = curl_init($url);
+    $responseHeaders = array();
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, CURLOPT_HEADER, false);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
@@ -30,6 +31,16 @@ function probe_fetch($url, $timeout, $method = 'GET', $fields = array(), $extraH
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/149.0.0.0 Safari/537.36');
+    curl_setopt($curl, CURLOPT_HEADERFUNCTION, function ($handle, $line) use (&$responseHeaders) {
+        $length = strlen($line);
+        $separator = strpos($line, ':');
+        if ($separator !== false) {
+            $name = strtolower(trim(substr($line, 0, $separator)));
+            $value = trim(substr($line, $separator + 1));
+            if ($name !== '') { $responseHeaders[$name] = $value; }
+        }
+        return $length;
+    });
     $headers = array(
         'Accept: text/html,application/xhtml+xml,application/json,application/javascript,*/*;q=0.8',
         'Accept-Language: ru-RU,ru;q=0.9'
@@ -56,7 +67,8 @@ function probe_fetch($url, $timeout, $method = 'GET', $fields = array(), $extraH
         'type' => (string) curl_getinfo($curl, CURLINFO_CONTENT_TYPE),
         'errno' => curl_errno($curl),
         'error' => curl_error($curl),
-        'body' => $body === false ? '' : $body
+        'body' => $body === false ? '' : $body,
+        'headers' => $responseHeaders
     );
     curl_close($curl);
     return $result;
@@ -124,6 +136,15 @@ function probe_summary($label, $response)
     );
     if (!$response['ok']) {
         printf("  ERROR=%s\n", $response['error'] === '' ? 'request_failed' : $response['error']);
+    }
+    if (!empty($response['headers']['allow'])) {
+        printf("  ALLOW=%s\n", $response['headers']['allow']);
+    }
+    if (!empty($response['headers']['access-control-allow-methods'])) {
+        printf("  CORS_METHODS=%s\n", $response['headers']['access-control-allow-methods']);
+    }
+    if (!empty($response['headers']['access-control-allow-origin'])) {
+        printf("  CORS_ORIGIN=%s\n", $response['headers']['access-control-allow-origin']);
     }
 }
 
