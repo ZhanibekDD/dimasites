@@ -119,7 +119,7 @@ for marker in ("navigator_route_created", "officialSources", "downloadReport", "
 search_source = (ROOT.parent / "src" / "stroypoisk.js").read_text(encoding="utf-8")
 if "sources: ['fns-profile', 'egrz', 'eis']" not in search_source:
     errors.append("stroypoisk.js: company route must contain one FNS source without duplicate extract card")
-for marker in ("Все поля ответа ФНС", "company-documents", "safeOfficialHref", "fetchRegistrySource", "sourceResponseHtml"):
+for marker in ("Все поля ответа ФНС", "company-documents", "safeOfficialHref", "fetchRegistrySource", "renderSourceReport", "sourceReportSectionHtml"):
     if marker not in search_source:
         errors.append(f"stroypoisk.js: missing full FNS result UI marker {marker}")
 
