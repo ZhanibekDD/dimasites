@@ -127,10 +127,18 @@
         <p class="source-disclaimer"><b>A*</b> означает официальный источник. Конкретный факт получает уровень A только после сверки записи или подписанной выписки.</p>
         <div class="source-routes" data-source-routes></div>
 
+        <section class="source-report" data-source-report hidden aria-labelledby="source-report-title" aria-live="polite">
+          <div class="source-report-head">
+            <div><span>03 / СВОДНЫЙ ОТЧЁТ</span><h2 id="source-report-title">Результаты по порядку</h2><p>Каждый источник показан отдельным разделом. Записи, реквизиты, документы и технические сведения больше не смешиваются между собой.</p></div>
+            <div class="source-report-summary" data-source-report-summary></div>
+          </div>
+          <div class="source-report-list" data-source-report-list></div>
+        </section>
+
         <section class="next-action" aria-labelledby="next-action-title">
           <div class="action-map" aria-hidden="true"><span></span><i></i><b></b><em>Next<br>move</em></div>
           <div class="action-copy">
-            <span>03 / СЛЕДУЮЩИЙ ШАГ</span>
+            <span>04 / СЛЕДУЮЩИЙ ШАГ</span>
             <h2 id="next-action-title" data-action-title>Получить строительный профиль</h2>
             <p>Рекомендуемая компетенция «ДНЕПРА»: <strong data-action-service>Квалификация компании и партнёрство</strong>.</p>
           </div>
@@ -148,12 +156,12 @@
         </section>
 
         <section class="passport-export" aria-labelledby="passport-title">
-          <div><span>04 / СТРОЙПАСПОРТ</span><h2 id="passport-title">Сохраните доказательства</h2><p>Статусы, даты, ссылки и ваши заметки сохраняются только в этом браузере. Скачайте копию, чтобы приложить её к задаче или передать инженеру.</p></div>
+          <div><span>05 / СТРОЙПАСПОРТ</span><h2 id="passport-title">Сохраните доказательства</h2><p>Статусы, даты, ссылки и ваши заметки сохраняются только в этом браузере. Скачайте копию, чтобы приложить её к задаче или передать инженеру.</p></div>
           <div class="passport-actions"><button type="button" data-export-passport-html>Отчёт HTML <span>↗</span></button><button type="button" data-export-passport-json>Данные JSON <span>↗</span></button></div>
         </section>
 
         <section class="search-lead" aria-labelledby="search-lead-title">
-          <div><span>05 / ИНЖЕНЕРНЫЙ КОНТАКТ</span><h2 id="search-lead-title">Передать маршрут «ДНЕПРУ»</h2><p>Отправим контакты, ваш запрос и отмеченные статусы. Специалист проверит первоисточники и предложит следующий инженерный шаг.</p></div>
+          <div><span>06 / ИНЖЕНЕРНЫЙ КОНТАКТ</span><h2 id="search-lead-title">Передать маршрут «ДНЕПРУ»</h2><p>Отправим контакты, ваш запрос и отмеченные статусы. Специалист проверит первоисточники и предложит следующий инженерный шаг.</p></div>
           <form action="/contact.php" method="post" data-contact-form data-search-lead-form>
             <div class="search-form-grid">
               <div class="field"><label for="search-name">Имя *</label><input id="search-name" name="name" autocomplete="name" required maxlength="80"></div>
@@ -202,6 +210,6 @@
     </div><div class="footer-bottom"><span>© 1992–2026 ООО «ДНЕПР»</span><a href="/privacy/">Политика конфиденциальности</a></div></div>
   </footer>
   <script src="/assets/js/main.js?v=20260811-lead1" defer></script>
-  <script src="/assets/js/stroypoisk.bundle.js?v=20260811-sources2" defer></script>
+  <script src="/assets/js/stroypoisk.bundle.js?v=20260813-report1" defer></script>
 </body>
 </html>
