@@ -17,7 +17,7 @@ if (!function_exists('curl_init')) {
     exit(1);
 }
 
-function probe_fetch($url, $timeout)
+function probe_fetch($url, $timeout, $method = 'GET', $fields = array(), $extraHeaders = array())
 {
     $curl = curl_init($url);
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
@@ -30,10 +30,16 @@ function probe_fetch($url, $timeout)
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/149.0.0.0 Safari/537.36');
-    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+    $headers = array(
         'Accept: text/html,application/xhtml+xml,application/json,application/javascript,*/*;q=0.8',
         'Accept-Language: ru-RU,ru;q=0.9'
-    ));
+    );
+    foreach ($extraHeaders as $extraHeader) { $headers[] = $extraHeader; }
+    curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+    if (strtoupper($method) === 'POST') {
+        curl_setopt($curl, CURLOPT_POST, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields, '', '&'));
+    }
     if (defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')) {
         curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     }
@@ -52,6 +58,17 @@ function probe_fetch($url, $timeout)
     );
     curl_close($curl);
     return $result;
+}
+
+function probe_attributes($tag)
+{
+    $attributes = array();
+    if (preg_match_all('/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\\s*=\\s*(["\\x27])(.*?)\\2/su', $tag, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $match) {
+            $attributes[strtolower($match[1])] = html_entity_decode($match[3], ENT_QUOTES, 'UTF-8');
+        }
+    }
+    return $attributes;
 }
 
 function probe_origin($url)
@@ -261,6 +278,85 @@ foreach ($publicSearchUrls as $publicSearchUrl) {
         $preview = substr($publicSearchResponse['body'], 0, 5000);
         $preview = preg_replace('/\\s+/', ' ', $preview);
         echo "  BODY=" . ($preview === null ? '-' : $preview) . "\n";
+    }
+}
+
+echo "LEGACY_REGISTRY_PROBE:\n";
+$legacyUrl = 'https://egrz.ru/organisation/reestr/latest';
+$legacy = probe_fetch($legacyUrl, 30);
+probe_summary('LEGACY_PAGE', $legacy);
+if ($legacy['ok'] && $legacy['status'] >= 200 && $legacy['status'] < 400) {
+    $legacyHtml = $legacy['body'];
+    printf(
+        "  STRUCTURE forms=%d inputs=%d detail-links=%d contains-search-label=%s\n",
+        preg_match_all('/<form\\b/iu', $legacyHtml),
+        preg_match_all('/<input\\b/iu', $legacyHtml),
+        preg_match_all('#/organisation/reestr/detail/#iu', $legacyHtml),
+        stripos($legacyHtml, 'Введите поисковый запрос') !== false ? 'yes' : 'no'
+    );
+    $legacyForm = '';
+    if (preg_match_all('/<form\\b[^>]*>.*?<\\/form>/isu', $legacyHtml, $legacyForms)) {
+        foreach ($legacyForms[0] as $candidateForm) {
+            if (stripos($candidateForm, 'Введите поисковый запрос') !== false || stripos($candidateForm, 'Расширенный поиск') !== false) {
+                $legacyForm = $candidateForm;
+                break;
+            }
+        }
+    }
+    if ($legacyForm === '') {
+        echo "  FORM=not_discovered\n";
+    } else {
+        preg_match('/<form\\b[^>]*>/isu', $legacyForm, $legacyFormTagMatch);
+        $legacyFormAttributes = probe_attributes(isset($legacyFormTagMatch[0]) ? $legacyFormTagMatch[0] : '');
+        $legacyFields = array();
+        $legacySearchName = '';
+        echo "  INPUTS:\n";
+        if (preg_match_all('/<input\\b[^>]*>/isu', $legacyForm, $legacyInputs)) {
+            foreach ($legacyInputs[0] as $legacyInputTag) {
+                $legacyInput = probe_attributes($legacyInputTag);
+                $legacyName = isset($legacyInput['name']) ? $legacyInput['name'] : '';
+                $legacyType = isset($legacyInput['type']) ? strtolower($legacyInput['type']) : 'text';
+                $legacyPlaceholder = isset($legacyInput['placeholder']) ? $legacyInput['placeholder'] : '';
+                $legacyValue = isset($legacyInput['value']) ? $legacyInput['value'] : '';
+                printf("    name=%s type=%s placeholder=%s value=%s\n", $legacyName ?: '-', $legacyType, $legacyPlaceholder ?: '-', $legacyValue ?: '-');
+                if ($legacyName !== '' && ($legacyType === 'hidden' || isset($legacyInput['value']))) {
+                    $legacyFields[$legacyName] = $legacyValue;
+                }
+                if ($legacySearchName === '' && $legacyName !== '' && in_array($legacyType, array('text', 'search', ''), true)) {
+                    $legacySearchName = $legacyName;
+                }
+            }
+        }
+        $legacyAction = isset($legacyFormAttributes['action']) ? $legacyFormAttributes['action'] : $legacyUrl;
+        $legacyTarget = probe_absolute_url($legacyUrl, $legacyAction);
+        if ($legacyTarget === '') { $legacyTarget = $legacyUrl; }
+        $legacyMethod = isset($legacyFormAttributes['method']) ? strtoupper($legacyFormAttributes['method']) : 'GET';
+        printf("  FORM method=%s target=%s search-field=%s\n", $legacyMethod, $legacyTarget, $legacySearchName ?: '-');
+        if ($legacySearchName !== '') {
+            $controlNumber = '77-1-1-2-012149-2025';
+            $legacyFields[$legacySearchName] = $controlNumber;
+            $legacyHeaders = array('Referer: ' . $legacyUrl);
+            if ($legacyMethod === 'POST') {
+                $legacyHeaders[] = 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8';
+                $legacySearch = probe_fetch($legacyTarget, 35, 'POST', $legacyFields, $legacyHeaders);
+            } else {
+                $legacySeparator = strpos($legacyTarget, '?') === false ? '?' : '&';
+                $legacySearch = probe_fetch($legacyTarget . $legacySeparator . http_build_query($legacyFields, '', '&'), 35, 'GET', array(), $legacyHeaders);
+            }
+            probe_summary('LEGACY_SEARCH', $legacySearch);
+            printf(
+                "  RESULT exact-number=%s detail-links=%d empty-marker=%s\n",
+                stripos($legacySearch['body'], $controlNumber) !== false ? 'yes' : 'no',
+                preg_match_all('#/organisation/reestr/detail/#iu', $legacySearch['body']),
+                (stripos($legacySearch['body'], 'Найдено записей: 0') !== false || stripos($legacySearch['body'], 'ничего не найдено') !== false) ? 'yes' : 'no'
+            );
+            $legacyNumberPosition = stripos($legacySearch['body'], $controlNumber);
+            if ($legacyNumberPosition !== false) {
+                $legacyContext = substr($legacySearch['body'], max(0, $legacyNumberPosition - 600), 1800);
+                $legacyContext = preg_replace('/\\s+/', ' ', strip_tags($legacyContext));
+                echo "  RESULT_CONTEXT=" . ($legacyContext === null ? '-' : trim($legacyContext)) . "\n";
+            }
+        }
     }
 }
 
