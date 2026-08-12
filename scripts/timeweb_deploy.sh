@@ -80,8 +80,13 @@ echo "Testing candidate against real FNS, EGRZ and EIS records..."
 if ! python3 "${DEPLOY_REPOSITORY}/scripts/production_smoke.py" \
     --document-root "${DEPLOY_REPOSITORY}/site" \
     --php-bin "$(command -v php)" \
-    --expected-version "$(git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD)"; then
+    --expected-version "$(git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD)" \
+    --report-json "${HOME}/dnepr-source-gate-latest.json"; then
+    php "${DEPLOY_REPOSITORY}/scripts/source_runtime_probe.php" \
+        > "${HOME}/dnepr-source-probe-latest.json" 2>&1 || true
     echo "Release gate rejected the candidate. The live site is unchanged."
+    echo "Full source report: ${HOME}/dnepr-source-gate-latest.json"
+    echo "Network/TLS probe: ${HOME}/dnepr-source-probe-latest.json"
     exit 1
 fi
 
