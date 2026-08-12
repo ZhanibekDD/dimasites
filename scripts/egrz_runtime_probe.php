@@ -152,6 +152,7 @@ if (!$scriptUrls) {
 }
 
 $interesting = array();
+$bundleBodies = array();
 $checked = 0;
 foreach (array_keys($scriptUrls) as $scriptUrl) {
     if ($checked >= 12) { break; }
@@ -167,6 +168,7 @@ foreach (array_keys($scriptUrls) as $scriptUrl) {
         echo "  REJECTED=bundle_too_large\n";
         continue;
     }
+    $bundleBodies[$scriptUrl] = $script['body'];
     if (preg_match_all('/(["\x27])([^"\x27]{0,260}(?:open-api|\/api\/|reestr|search|expertise|conclusion)[^"\x27]{0,260})\1/iu', $script['body'], $strings, PREG_SET_ORDER)) {
         foreach ($strings as $stringMatch) {
             $candidate = preg_replace('/\\\\\//', '/', trim($stringMatch[2]));
@@ -183,6 +185,83 @@ if (!$interesting) {
     echo "  none discovered\n";
 } else {
     foreach (array_keys($interesting) as $candidate) { echo "  " . $candidate . "\n"; }
+}
+
+// Print only the small, relevant pieces of the minified Angular application.
+// This is intentionally placed after the broad inventory so the final screen of
+// terminal output contains the values needed to implement the real adapter.
+$targetNames = array(
+    'PrivatePortal_SEARCH_API',
+    'searchAPI',
+    'searchGetSearchParameters',
+    'searchGetSearchParametersByKOSFN',
+    'searchExpertiseSimple',
+    'searchExpertise',
+    'searchBuildingObjectsSimple'
+);
+
+echo "TARGET_ASSIGNMENTS:\n";
+$assignments = array();
+foreach ($bundleBodies as $bundleUrl => $bundleBody) {
+    foreach ($targetNames as $targetName) {
+        $pattern = '/(?:[A-Za-z_$][A-Za-z0-9_$]*\\.)?' . preg_quote($targetName, '/') . '\\s*=\\s*([^,;]{1,900})/u';
+        if (!preg_match_all($pattern, $bundleBody, $targetMatches, PREG_SET_ORDER)) { continue; }
+        foreach ($targetMatches as $targetMatch) {
+            $value = preg_replace('/\\s+/', ' ', trim($targetMatch[1]));
+            if ($value === null || $value === '') { continue; }
+            $key = $targetName . '=' . $value;
+            if (isset($assignments[$key])) { continue; }
+            $assignments[$key] = true;
+            printf("  %s=%s [bundle=%s]\n", $targetName, $value, basename((string) parse_url($bundleUrl, PHP_URL_PATH)));
+        }
+    }
+}
+if (!$assignments) { echo "  none extracted\n"; }
+
+echo "TARGET_CONTEXTS:\n";
+$contextNeedles = array(
+    'searchGetSearchParameters=',
+    'searchExpertiseSimple=',
+    'searchExpertise=',
+    '.searchExpertiseSimple',
+    '.searchExpertise('
+);
+$printedContexts = array();
+foreach ($bundleBodies as $bundleUrl => $bundleBody) {
+    foreach ($contextNeedles as $needle) {
+        $offset = 0;
+        $occurrences = 0;
+        while (($position = strpos($bundleBody, $needle, $offset)) !== false && $occurrences < 2) {
+            $start = max(0, $position - 700);
+            $snippet = substr($bundleBody, $start, 2300);
+            $snippet = preg_replace('/\\s+/', ' ', $snippet);
+            if ($snippet !== null) {
+                $contextKey = hash('sha256', $snippet);
+                if (!isset($printedContexts[$contextKey])) {
+                    $printedContexts[$contextKey] = true;
+                    printf("  [%s @ %d in %s]\n%s\n", $needle, $position, basename((string) parse_url($bundleUrl, PHP_URL_PATH)), $snippet);
+                }
+            }
+            $offset = $position + strlen($needle);
+            $occurrences++;
+        }
+    }
+}
+if (!$printedContexts) { echo "  none extracted\n"; }
+
+echo "PUBLIC_SEARCH_PROBES:\n";
+$publicSearchUrls = array(
+    'http://reestr.egrz.ru/EGRZ/api/Search/inputSettings',
+    'https://reestr.egrz.ru/EGRZ/api/Search/inputSettings'
+);
+foreach ($publicSearchUrls as $publicSearchUrl) {
+    $publicSearchResponse = probe_fetch($publicSearchUrl, 20);
+    probe_summary('PUBLIC_SEARCH', $publicSearchResponse);
+    if ($publicSearchResponse['body'] !== '' && strlen($publicSearchResponse['body']) <= 120000 && !probe_is_html_response($publicSearchResponse)) {
+        $preview = substr($publicSearchResponse['body'], 0, 5000);
+        $preview = preg_replace('/\\s+/', ' ', $preview);
+        echo "  BODY=" . ($preview === null ? '-' : $preview) . "\n";
+    }
 }
 
 echo "OPEN_API_PROBES:\n";
