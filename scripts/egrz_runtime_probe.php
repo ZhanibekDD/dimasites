@@ -39,6 +39,8 @@ function probe_fetch($url, $timeout, $method = 'GET', $fields = array(), $extraH
     if (strtoupper($method) === 'POST') {
         curl_setopt($curl, CURLOPT_POST, true);
         curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields, '', '&'));
+    } elseif (strtoupper($method) !== 'GET') {
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, strtoupper($method));
     }
     if (defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')) {
         curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
@@ -278,6 +280,45 @@ foreach ($publicSearchUrls as $publicSearchUrl) {
         $preview = substr($publicSearchResponse['body'], 0, 5000);
         $preview = preg_replace('/\\s+/', ' ', $preview);
         echo "  BODY=" . ($preview === null ? '-' : $preview) . "\n";
+    }
+}
+
+// The current public UI is an Angular application. Its production bundle points
+// search calls at this separate registry host. Probe only metadata and read-only
+// routes so we can reconstruct the contract without guessing or mutating EGRZ.
+echo "PUBLIC_API_CONTRACT_PROBE:\n";
+$registryBases = array(
+    'http://reestr.egrz.ru/EGRZ/',
+    'https://reestr.egrz.ru/EGRZ/'
+);
+$registryPaths = array(
+    'api/Search/inputSettings',
+    'api/Search/GetSearchParameters',
+    'api/Search/GetSearchParametersByKOSFN',
+    'api/Search/ExpertiseSimple',
+    'api/Search/Expertise',
+    'api/Search/BuildingObjectsSimple'
+);
+foreach ($registryBases as $registryBase) {
+    foreach ($registryPaths as $registryPath) {
+        $registryUrl = $registryBase . $registryPath;
+        $options = probe_fetch($registryUrl, 20, 'OPTIONS', array(), array(
+            'Origin: https://egrz.ru',
+            'Access-Control-Request-Method: GET',
+            'Access-Control-Request-Headers: content-type'
+        ));
+        probe_summary('CONTRACT OPTIONS', $options);
+
+        $get = probe_fetch($registryUrl, 25, 'GET', array(), array(
+            'Origin: https://egrz.ru',
+            'Referer: https://egrz.ru/'
+        ));
+        probe_summary('CONTRACT GET', $get);
+        if ($get['body'] !== '' && strlen($get['body']) <= 180000 && !probe_is_html_response($get)) {
+            $contractPreview = substr($get['body'], 0, 12000);
+            $contractPreview = preg_replace('/\\s+/', ' ', $contractPreview);
+            echo "  BODY=" . ($contractPreview === null ? '-' : $contractPreview) . "\n";
+        }
     }
 }
 
