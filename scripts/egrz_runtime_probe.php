@@ -17,9 +17,10 @@ if (!function_exists('curl_init')) {
     exit(1);
 }
 
-function probe_fetch($url, $timeout)
+function probe_fetch($url, $timeout, $method = 'GET', $fields = array(), $extraHeaders = array())
 {
     $curl = curl_init($url);
+    $responseHeaders = array();
     curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($curl, CURLOPT_HEADER, false);
     curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
@@ -30,10 +31,28 @@ function probe_fetch($url, $timeout)
     curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($curl, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/149.0.0.0 Safari/537.36');
-    curl_setopt($curl, CURLOPT_HTTPHEADER, array(
+    curl_setopt($curl, CURLOPT_HEADERFUNCTION, function ($handle, $line) use (&$responseHeaders) {
+        $length = strlen($line);
+        $separator = strpos($line, ':');
+        if ($separator !== false) {
+            $name = strtolower(trim(substr($line, 0, $separator)));
+            $value = trim(substr($line, $separator + 1));
+            if ($name !== '') { $responseHeaders[$name] = $value; }
+        }
+        return $length;
+    });
+    $headers = array(
         'Accept: text/html,application/xhtml+xml,application/json,application/javascript,*/*;q=0.8',
         'Accept-Language: ru-RU,ru;q=0.9'
-    ));
+    );
+    foreach ($extraHeaders as $extraHeader) { $headers[] = $extraHeader; }
+    curl_setopt($curl, CURLOPT_HTTPHEADER, $headers);
+    if (strtoupper($method) === 'POST') {
+        curl_setopt($curl, CURLOPT_POST, true);
+        curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($fields, '', '&'));
+    } elseif (strtoupper($method) !== 'GET') {
+        curl_setopt($curl, CURLOPT_CUSTOMREQUEST, strtoupper($method));
+    }
     if (defined('CURLOPT_IPRESOLVE') && defined('CURL_IPRESOLVE_V4')) {
         curl_setopt($curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
     }
@@ -48,10 +67,32 @@ function probe_fetch($url, $timeout)
         'type' => (string) curl_getinfo($curl, CURLINFO_CONTENT_TYPE),
         'errno' => curl_errno($curl),
         'error' => curl_error($curl),
-        'body' => $body === false ? '' : $body
+        'body' => $body === false ? '' : $body,
+        'headers' => $responseHeaders
     );
     curl_close($curl);
     return $result;
+}
+
+function probe_attributes($tag)
+{
+    $attributes = array();
+    if (preg_match_all('/([a-zA-Z_:][-a-zA-Z0-9_:.]*)\\s*=\\s*(["\\x27])(.*?)\\2/su', $tag, $matches, PREG_SET_ORDER)) {
+        foreach ($matches as $match) {
+            $attributes[strtolower($match[1])] = html_entity_decode($match[3], ENT_QUOTES, 'UTF-8');
+        }
+    }
+    return $attributes;
+}
+
+function probe_origin($url)
+{
+    $parts = parse_url($url);
+    if (!is_array($parts) || empty($parts['host'])) { return ''; }
+    $scheme = isset($parts['scheme']) ? strtolower($parts['scheme']) : 'https';
+    $origin = $scheme . '://' . $parts['host'];
+    if (isset($parts['port'])) { $origin .= ':' . $parts['port']; }
+    return $origin;
 }
 
 function probe_absolute_url($base, $href)
@@ -59,9 +100,26 @@ function probe_absolute_url($base, $href)
     $href = html_entity_decode(trim($href), ENT_QUOTES, 'UTF-8');
     if ($href === '') { return ''; }
     if (strpos($href, '//') === 0) { return 'https:' . $href; }
-    if (preg_match('#^https://#i', $href)) { return $href; }
-    if (strpos($href, '/') === 0) { return 'https://egrz.ru' . $href; }
-    return rtrim(dirname($base), '/') . '/' . ltrim($href, '/');
+    if (preg_match('#^https?://#i', $href)) { return $href; }
+
+    $origin = probe_origin($base);
+    if ($origin === '') { return ''; }
+    if (strpos($href, '/') === 0) { return $origin . $href; }
+
+    $basePath = (string) parse_url($base, PHP_URL_PATH);
+    if ($basePath === '' || substr($basePath, -1) !== '/') {
+        $basePath = rtrim(str_replace('\\', '/', dirname($basePath)), '/') . '/';
+    }
+    return $origin . $basePath . ltrim($href, '/');
+}
+
+function probe_is_html_response($response)
+{
+    $type = strtolower((string) $response['type']);
+    if (strpos($type, 'text/html') !== false || strpos($type, 'application/xhtml') !== false) {
+        return true;
+    }
+    return preg_match('/^\s*(?:<!doctype\s+html|<html\b)/iu', (string) $response['body']) === 1;
 }
 
 function probe_summary($label, $response)
@@ -78,6 +136,15 @@ function probe_summary($label, $response)
     );
     if (!$response['ok']) {
         printf("  ERROR=%s\n", $response['error'] === '' ? 'request_failed' : $response['error']);
+    }
+    if (!empty($response['headers']['allow'])) {
+        printf("  ALLOW=%s\n", $response['headers']['allow']);
+    }
+    if (!empty($response['headers']['access-control-allow-methods'])) {
+        printf("  CORS_METHODS=%s\n", $response['headers']['access-control-allow-methods']);
+    }
+    if (!empty($response['headers']['access-control-allow-origin'])) {
+        printf("  CORS_ORIGIN=%s\n", $response['headers']['access-control-allow-origin']);
     }
 }
 
@@ -97,10 +164,19 @@ printf(
     stripos($html, 'Номер заключения экспертизы') !== false ? 'yes' : 'no'
 );
 
+// Angular applications commonly publish relative bundle names together with
+// <base href="/">. Browser URL resolution must use that base, not dirname(page URL).
+$assetBaseUrl = $page['url'] !== '' ? $page['url'] : $pageUrl;
+if (preg_match('/<base\b[^>]*\bhref\s*=\s*(["\x27])(.*?)\1/isu', $html, $baseMatch)) {
+    $resolvedBase = probe_absolute_url($assetBaseUrl, $baseMatch[2]);
+    if ($resolvedBase !== '') { $assetBaseUrl = $resolvedBase; }
+}
+echo "ASSET_BASE: " . $assetBaseUrl . "\n";
+
 $scriptUrls = array();
 if (preg_match_all('/<script\b[^>]*\bsrc\s*=\s*(["\x27])(.*?)\1/isu', $html, $matches, PREG_SET_ORDER)) {
     foreach ($matches as $match) {
-        $url = probe_absolute_url($pageUrl, $match[2]);
+        $url = probe_absolute_url($assetBaseUrl, $match[2]);
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
         if (($host === 'egrz.ru' || $host === 'www.egrz.ru' || $host === 'open-api.egrz.ru') && !isset($scriptUrls[$url])) {
             $scriptUrls[$url] = true;
@@ -116,20 +192,30 @@ if (!$scriptUrls) {
 }
 
 $interesting = array();
+$bundleBodies = array();
 $checked = 0;
 foreach (array_keys($scriptUrls) as $scriptUrl) {
     if ($checked >= 12) { break; }
     $checked++;
     $script = probe_fetch($scriptUrl, 25);
     probe_summary('SCRIPT ' . $checked, $script);
-    if (!$script['ok'] || strlen($script['body']) > 8000000) { continue; }
-    if (preg_match_all('/(["\x27])([^"\x27]{0,220}(?:open-api|\/api\/|reestr|search|expertise|conclusion)[^"\x27]{0,220})\1/iu', $script['body'], $strings, PREG_SET_ORDER)) {
+    if (!$script['ok']) { continue; }
+    if (probe_is_html_response($script)) {
+        echo "  REJECTED=html_fallback_not_javascript\n";
+        continue;
+    }
+    if (strlen($script['body']) > 12000000) {
+        echo "  REJECTED=bundle_too_large\n";
+        continue;
+    }
+    $bundleBodies[$scriptUrl] = $script['body'];
+    if (preg_match_all('/(["\x27])([^"\x27]{0,260}(?:open-api|\/api\/|reestr|search|expertise|conclusion)[^"\x27]{0,260})\1/iu', $script['body'], $strings, PREG_SET_ORDER)) {
         foreach ($strings as $stringMatch) {
             $candidate = preg_replace('/\\\\\//', '/', trim($stringMatch[2]));
-            if ($candidate === null || strlen($candidate) < 4 || strlen($candidate) > 440) { continue; }
+            if ($candidate === null || strlen($candidate) < 4 || strlen($candidate) > 520) { continue; }
             if (strpos($candidate, '/') === false && stripos($candidate, 'api') === false) { continue; }
             $interesting[$candidate] = true;
-            if (count($interesting) >= 80) { break 2; }
+            if (count($interesting) >= 120) { break 2; }
         }
     }
 }
@@ -139,6 +225,201 @@ if (!$interesting) {
     echo "  none discovered\n";
 } else {
     foreach (array_keys($interesting) as $candidate) { echo "  " . $candidate . "\n"; }
+}
+
+// Print only the small, relevant pieces of the minified Angular application.
+// This is intentionally placed after the broad inventory so the final screen of
+// terminal output contains the values needed to implement the real adapter.
+$targetNames = array(
+    'PrivatePortal_SEARCH_API',
+    'searchAPI',
+    'searchGetSearchParameters',
+    'searchGetSearchParametersByKOSFN',
+    'searchExpertiseSimple',
+    'searchExpertise',
+    'searchBuildingObjectsSimple'
+);
+
+echo "TARGET_ASSIGNMENTS:\n";
+$assignments = array();
+foreach ($bundleBodies as $bundleUrl => $bundleBody) {
+    foreach ($targetNames as $targetName) {
+        $pattern = '/(?:[A-Za-z_$][A-Za-z0-9_$]*\\.)?' . preg_quote($targetName, '/') . '\\s*=\\s*([^,;]{1,900})/u';
+        if (!preg_match_all($pattern, $bundleBody, $targetMatches, PREG_SET_ORDER)) { continue; }
+        foreach ($targetMatches as $targetMatch) {
+            $value = preg_replace('/\\s+/', ' ', trim($targetMatch[1]));
+            if ($value === null || $value === '') { continue; }
+            $key = $targetName . '=' . $value;
+            if (isset($assignments[$key])) { continue; }
+            $assignments[$key] = true;
+            printf("  %s=%s [bundle=%s]\n", $targetName, $value, basename((string) parse_url($bundleUrl, PHP_URL_PATH)));
+        }
+    }
+}
+if (!$assignments) { echo "  none extracted\n"; }
+
+echo "TARGET_CONTEXTS:\n";
+$contextNeedles = array(
+    'searchGetSearchParameters=',
+    'searchExpertiseSimple=',
+    'searchExpertise=',
+    '.searchExpertiseSimple',
+    '.searchExpertise('
+);
+$printedContexts = array();
+foreach ($bundleBodies as $bundleUrl => $bundleBody) {
+    foreach ($contextNeedles as $needle) {
+        $offset = 0;
+        $occurrences = 0;
+        while (($position = strpos($bundleBody, $needle, $offset)) !== false && $occurrences < 2) {
+            $start = max(0, $position - 700);
+            $snippet = substr($bundleBody, $start, 2300);
+            $snippet = preg_replace('/\\s+/', ' ', $snippet);
+            if ($snippet !== null) {
+                $contextKey = hash('sha256', $snippet);
+                if (!isset($printedContexts[$contextKey])) {
+                    $printedContexts[$contextKey] = true;
+                    printf("  [%s @ %d in %s]\n%s\n", $needle, $position, basename((string) parse_url($bundleUrl, PHP_URL_PATH)), $snippet);
+                }
+            }
+            $offset = $position + strlen($needle);
+            $occurrences++;
+        }
+    }
+}
+if (!$printedContexts) { echo "  none extracted\n"; }
+
+echo "PUBLIC_SEARCH_PROBES:\n";
+$publicSearchUrls = array(
+    'http://reestr.egrz.ru/EGRZ/api/Search/inputSettings',
+    'https://reestr.egrz.ru/EGRZ/api/Search/inputSettings'
+);
+foreach ($publicSearchUrls as $publicSearchUrl) {
+    $publicSearchResponse = probe_fetch($publicSearchUrl, 20);
+    probe_summary('PUBLIC_SEARCH', $publicSearchResponse);
+    if ($publicSearchResponse['body'] !== '' && strlen($publicSearchResponse['body']) <= 120000 && !probe_is_html_response($publicSearchResponse)) {
+        $preview = substr($publicSearchResponse['body'], 0, 5000);
+        $preview = preg_replace('/\\s+/', ' ', $preview);
+        echo "  BODY=" . ($preview === null ? '-' : $preview) . "\n";
+    }
+}
+
+// The current public UI is an Angular application. Its production bundle points
+// search calls at this separate registry host. Probe only metadata and read-only
+// routes so we can reconstruct the contract without guessing or mutating EGRZ.
+echo "PUBLIC_API_CONTRACT_PROBE:\n";
+$registryBases = array(
+    'http://reestr.egrz.ru/EGRZ/',
+    'https://reestr.egrz.ru/EGRZ/'
+);
+$registryPaths = array(
+    'api/Search/inputSettings',
+    'api/Search/GetSearchParameters',
+    'api/Search/GetSearchParametersByKOSFN',
+    'api/Search/ExpertiseSimple',
+    'api/Search/Expertise',
+    'api/Search/BuildingObjectsSimple'
+);
+foreach ($registryBases as $registryBase) {
+    foreach ($registryPaths as $registryPath) {
+        $registryUrl = $registryBase . $registryPath;
+        $options = probe_fetch($registryUrl, 20, 'OPTIONS', array(), array(
+            'Origin: https://egrz.ru',
+            'Access-Control-Request-Method: GET',
+            'Access-Control-Request-Headers: content-type'
+        ));
+        probe_summary('CONTRACT OPTIONS', $options);
+
+        $get = probe_fetch($registryUrl, 25, 'GET', array(), array(
+            'Origin: https://egrz.ru',
+            'Referer: https://egrz.ru/'
+        ));
+        probe_summary('CONTRACT GET', $get);
+        if ($get['body'] !== '' && strlen($get['body']) <= 180000 && !probe_is_html_response($get)) {
+            $contractPreview = substr($get['body'], 0, 12000);
+            $contractPreview = preg_replace('/\\s+/', ' ', $contractPreview);
+            echo "  BODY=" . ($contractPreview === null ? '-' : $contractPreview) . "\n";
+        }
+    }
+}
+
+echo "LEGACY_REGISTRY_PROBE:\n";
+$legacyUrl = 'https://egrz.ru/organisation/reestr/latest';
+$legacy = probe_fetch($legacyUrl, 30);
+probe_summary('LEGACY_PAGE', $legacy);
+if ($legacy['ok'] && $legacy['status'] >= 200 && $legacy['status'] < 400) {
+    $legacyHtml = $legacy['body'];
+    printf(
+        "  STRUCTURE forms=%d inputs=%d detail-links=%d contains-search-label=%s\n",
+        preg_match_all('/<form\\b/iu', $legacyHtml),
+        preg_match_all('/<input\\b/iu', $legacyHtml),
+        preg_match_all('#/organisation/reestr/detail/#iu', $legacyHtml),
+        stripos($legacyHtml, 'Введите поисковый запрос') !== false ? 'yes' : 'no'
+    );
+    $legacyForm = '';
+    if (preg_match_all('/<form\\b[^>]*>.*?<\\/form>/isu', $legacyHtml, $legacyForms)) {
+        foreach ($legacyForms[0] as $candidateForm) {
+            if (stripos($candidateForm, 'Введите поисковый запрос') !== false || stripos($candidateForm, 'Расширенный поиск') !== false) {
+                $legacyForm = $candidateForm;
+                break;
+            }
+        }
+    }
+    if ($legacyForm === '') {
+        echo "  FORM=not_discovered\n";
+    } else {
+        preg_match('/<form\\b[^>]*>/isu', $legacyForm, $legacyFormTagMatch);
+        $legacyFormAttributes = probe_attributes(isset($legacyFormTagMatch[0]) ? $legacyFormTagMatch[0] : '');
+        $legacyFields = array();
+        $legacySearchName = '';
+        echo "  INPUTS:\n";
+        if (preg_match_all('/<input\\b[^>]*>/isu', $legacyForm, $legacyInputs)) {
+            foreach ($legacyInputs[0] as $legacyInputTag) {
+                $legacyInput = probe_attributes($legacyInputTag);
+                $legacyName = isset($legacyInput['name']) ? $legacyInput['name'] : '';
+                $legacyType = isset($legacyInput['type']) ? strtolower($legacyInput['type']) : 'text';
+                $legacyPlaceholder = isset($legacyInput['placeholder']) ? $legacyInput['placeholder'] : '';
+                $legacyValue = isset($legacyInput['value']) ? $legacyInput['value'] : '';
+                printf("    name=%s type=%s placeholder=%s value=%s\n", $legacyName ?: '-', $legacyType, $legacyPlaceholder ?: '-', $legacyValue ?: '-');
+                if ($legacyName !== '' && ($legacyType === 'hidden' || isset($legacyInput['value']))) {
+                    $legacyFields[$legacyName] = $legacyValue;
+                }
+                if ($legacySearchName === '' && $legacyName !== '' && in_array($legacyType, array('text', 'search', ''), true)) {
+                    $legacySearchName = $legacyName;
+                }
+            }
+        }
+        $legacyAction = isset($legacyFormAttributes['action']) ? $legacyFormAttributes['action'] : $legacyUrl;
+        $legacyTarget = probe_absolute_url($legacyUrl, $legacyAction);
+        if ($legacyTarget === '') { $legacyTarget = $legacyUrl; }
+        $legacyMethod = isset($legacyFormAttributes['method']) ? strtoupper($legacyFormAttributes['method']) : 'GET';
+        printf("  FORM method=%s target=%s search-field=%s\n", $legacyMethod, $legacyTarget, $legacySearchName ?: '-');
+        if ($legacySearchName !== '') {
+            $controlNumber = '77-1-1-2-012149-2025';
+            $legacyFields[$legacySearchName] = $controlNumber;
+            $legacyHeaders = array('Referer: ' . $legacyUrl);
+            if ($legacyMethod === 'POST') {
+                $legacyHeaders[] = 'Content-Type: application/x-www-form-urlencoded; charset=UTF-8';
+                $legacySearch = probe_fetch($legacyTarget, 35, 'POST', $legacyFields, $legacyHeaders);
+            } else {
+                $legacySeparator = strpos($legacyTarget, '?') === false ? '?' : '&';
+                $legacySearch = probe_fetch($legacyTarget . $legacySeparator . http_build_query($legacyFields, '', '&'), 35, 'GET', array(), $legacyHeaders);
+            }
+            probe_summary('LEGACY_SEARCH', $legacySearch);
+            printf(
+                "  RESULT exact-number=%s detail-links=%d empty-marker=%s\n",
+                stripos($legacySearch['body'], $controlNumber) !== false ? 'yes' : 'no',
+                preg_match_all('#/organisation/reestr/detail/#iu', $legacySearch['body']),
+                (stripos($legacySearch['body'], 'Найдено записей: 0') !== false || stripos($legacySearch['body'], 'ничего не найдено') !== false) ? 'yes' : 'no'
+            );
+            $legacyNumberPosition = stripos($legacySearch['body'], $controlNumber);
+            if ($legacyNumberPosition !== false) {
+                $legacyContext = substr($legacySearch['body'], max(0, $legacyNumberPosition - 600), 1800);
+                $legacyContext = preg_replace('/\\s+/', ' ', strip_tags($legacyContext));
+                echo "  RESULT_CONTEXT=" . ($legacyContext === null ? '-' : trim($legacyContext)) . "\n";
+            }
+        }
+    }
 }
 
 echo "OPEN_API_PROBES:\n";
