@@ -54,14 +54,41 @@ function probe_fetch($url, $timeout)
     return $result;
 }
 
+function probe_origin($url)
+{
+    $parts = parse_url($url);
+    if (!is_array($parts) || empty($parts['host'])) { return ''; }
+    $scheme = isset($parts['scheme']) ? strtolower($parts['scheme']) : 'https';
+    $origin = $scheme . '://' . $parts['host'];
+    if (isset($parts['port'])) { $origin .= ':' . $parts['port']; }
+    return $origin;
+}
+
 function probe_absolute_url($base, $href)
 {
     $href = html_entity_decode(trim($href), ENT_QUOTES, 'UTF-8');
     if ($href === '') { return ''; }
     if (strpos($href, '//') === 0) { return 'https:' . $href; }
-    if (preg_match('#^https://#i', $href)) { return $href; }
-    if (strpos($href, '/') === 0) { return 'https://egrz.ru' . $href; }
-    return rtrim(dirname($base), '/') . '/' . ltrim($href, '/');
+    if (preg_match('#^https?://#i', $href)) { return $href; }
+
+    $origin = probe_origin($base);
+    if ($origin === '') { return ''; }
+    if (strpos($href, '/') === 0) { return $origin . $href; }
+
+    $basePath = (string) parse_url($base, PHP_URL_PATH);
+    if ($basePath === '' || substr($basePath, -1) !== '/') {
+        $basePath = rtrim(str_replace('\\', '/', dirname($basePath)), '/') . '/';
+    }
+    return $origin . $basePath . ltrim($href, '/');
+}
+
+function probe_is_html_response($response)
+{
+    $type = strtolower((string) $response['type']);
+    if (strpos($type, 'text/html') !== false || strpos($type, 'application/xhtml') !== false) {
+        return true;
+    }
+    return preg_match('/^\s*(?:<!doctype\s+html|<html\b)/iu', (string) $response['body']) === 1;
 }
 
 function probe_summary($label, $response)
@@ -97,10 +124,19 @@ printf(
     stripos($html, 'Номер заключения экспертизы') !== false ? 'yes' : 'no'
 );
 
+// Angular applications commonly publish relative bundle names together with
+// <base href="/">. Browser URL resolution must use that base, not dirname(page URL).
+$assetBaseUrl = $page['url'] !== '' ? $page['url'] : $pageUrl;
+if (preg_match('/<base\b[^>]*\bhref\s*=\s*(["\x27])(.*?)\1/isu', $html, $baseMatch)) {
+    $resolvedBase = probe_absolute_url($assetBaseUrl, $baseMatch[2]);
+    if ($resolvedBase !== '') { $assetBaseUrl = $resolvedBase; }
+}
+echo "ASSET_BASE: " . $assetBaseUrl . "\n";
+
 $scriptUrls = array();
 if (preg_match_all('/<script\b[^>]*\bsrc\s*=\s*(["\x27])(.*?)\1/isu', $html, $matches, PREG_SET_ORDER)) {
     foreach ($matches as $match) {
-        $url = probe_absolute_url($pageUrl, $match[2]);
+        $url = probe_absolute_url($assetBaseUrl, $match[2]);
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
         if (($host === 'egrz.ru' || $host === 'www.egrz.ru' || $host === 'open-api.egrz.ru') && !isset($scriptUrls[$url])) {
             $scriptUrls[$url] = true;
@@ -122,14 +158,22 @@ foreach (array_keys($scriptUrls) as $scriptUrl) {
     $checked++;
     $script = probe_fetch($scriptUrl, 25);
     probe_summary('SCRIPT ' . $checked, $script);
-    if (!$script['ok'] || strlen($script['body']) > 8000000) { continue; }
-    if (preg_match_all('/(["\x27])([^"\x27]{0,220}(?:open-api|\/api\/|reestr|search|expertise|conclusion)[^"\x27]{0,220})\1/iu', $script['body'], $strings, PREG_SET_ORDER)) {
+    if (!$script['ok']) { continue; }
+    if (probe_is_html_response($script)) {
+        echo "  REJECTED=html_fallback_not_javascript\n";
+        continue;
+    }
+    if (strlen($script['body']) > 12000000) {
+        echo "  REJECTED=bundle_too_large\n";
+        continue;
+    }
+    if (preg_match_all('/(["\x27])([^"\x27]{0,260}(?:open-api|\/api\/|reestr|search|expertise|conclusion)[^"\x27]{0,260})\1/iu', $script['body'], $strings, PREG_SET_ORDER)) {
         foreach ($strings as $stringMatch) {
             $candidate = preg_replace('/\\\\\//', '/', trim($stringMatch[2]));
-            if ($candidate === null || strlen($candidate) < 4 || strlen($candidate) > 440) { continue; }
+            if ($candidate === null || strlen($candidate) < 4 || strlen($candidate) > 520) { continue; }
             if (strpos($candidate, '/') === false && stripos($candidate, 'api') === false) { continue; }
             $interesting[$candidate] = true;
-            if (count($interesting) >= 80) { break 2; }
+            if (count($interesting) >= 120) { break 2; }
         }
     }
 }
