@@ -262,6 +262,12 @@ def main():
     parser.add_argument("--attempts", type=int, default=2)
     parser.add_argument("--release-only", action="store_true")
     parser.add_argument("--report-json", default="")
+    parser.add_argument(
+        "--optional-source",
+        action="append",
+        default=[],
+        help="Source that remains visible in the report but does not block deployment",
+    )
     args = parser.parse_args()
 
     client = GatewayClient(args.base_url or "", args.document_root or "", args.php_bin)
@@ -304,11 +310,18 @@ def main():
         )
 
     results = [execute_check(name, callback, values) for name, callback, values in checks]
+    optional_sources = {name.upper() for name in args.optional_source}
+    for item in results:
+        item["blocking"] = item["name"].upper() not in optional_sources
+    blocking_failed = [
+        item["name"] for item in results
+        if item["status"] == "fail" and item["blocking"]
+    ]
     report = {
         "schema": "dnepr-source-gate/1.0",
         "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "target": args.base_url or args.document_root,
-        "passed": all(item["status"] == "pass" for item in results),
+        "passed": not blocking_failed,
         "checks": results,
     }
     write_report(args.report_json, report)
@@ -316,10 +329,13 @@ def main():
     passed = [item["name"] for item in results if item["status"] == "pass"]
     failed = [item["name"] for item in results if item["status"] == "fail"]
     print("SOURCE GATE SUMMARY: pass=%s fail=%s" % (",".join(passed) or "-", ",".join(failed) or "-"))
-    if failed:
-        print("Release gate failed. All configured sources were tested; see the report above.", file=sys.stderr)
+    if blocking_failed:
+        print("Release gate failed. Blocking sources failed: %s." % ",".join(blocking_failed), file=sys.stderr)
         return 1
-    print("All release-gate checks passed.")
+    optional_failed = [name for name in failed if name.upper() in optional_sources]
+    if optional_failed:
+        print("Release gate passed with monitored source degradation: %s." % ",".join(optional_failed))
+    print("All blocking release-gate checks passed.")
     return 0
 
 

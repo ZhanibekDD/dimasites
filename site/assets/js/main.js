@@ -3,6 +3,55 @@
   const menuButton = document.querySelector('.menu-button');
   const nav = document.querySelector('.main-nav');
 
+  const pushAnalytics = (event, data = {}) => {
+    window.dataLayer = window.dataLayer || [];
+    window.dataLayer.push({ event, ...data });
+  };
+
+  const currentParams = new URLSearchParams(window.location.search);
+  const attributionKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'gclid', 'yclid'];
+  let storedAttribution = {};
+  try {
+    storedAttribution = JSON.parse(window.sessionStorage.getItem('dnepr_attribution') || '{}');
+  } catch (_) {
+    storedAttribution = {};
+  }
+  attributionKeys.forEach((key) => {
+    const value = currentParams.get(key);
+    if (value) storedAttribution[key] = value.slice(0, 200);
+  });
+  if (!storedAttribution.landing_page) storedAttribution.landing_page = window.location.href.slice(0, 500);
+  if (!storedAttribution.referrer && document.referrer) {
+    try {
+      const referrerUrl = new URL(document.referrer);
+      if (referrerUrl.hostname !== window.location.hostname) storedAttribution.referrer = document.referrer.slice(0, 500);
+    } catch (_) {
+      storedAttribution.referrer = document.referrer.slice(0, 500);
+    }
+  }
+  try {
+    window.sessionStorage.setItem('dnepr_attribution', JSON.stringify(storedAttribution));
+  } catch (_) {
+    // The site remains fully functional when storage is disabled.
+  }
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('a');
+    if (!link) return;
+    const href = link.getAttribute('href') || '';
+    if (href.startsWith('tel:')) {
+      pushAnalytics('phone_click', { phone_number: href.replace('tel:', ''), link_text: link.textContent.trim().slice(0, 120), page_path: window.location.pathname });
+      return;
+    }
+    if (href.startsWith('mailto:')) {
+      pushAnalytics('email_click', { email_address: href.replace('mailto:', ''), page_path: window.location.pathname });
+      return;
+    }
+    if (link.matches('.button, .header-cta, .knowledge-card, .knowledge-list-card a')) {
+      pushAnalytics('cta_click', { link_text: link.textContent.trim().slice(0, 120), link_url: link.href.slice(0, 500), page_path: window.location.pathname });
+    }
+  });
+
   const updateHeader = () => {
     if (!header) return;
     header.classList.toggle('scrolled', window.scrollY > 24);
@@ -51,6 +100,24 @@
   const toolLabel = searchHref ? 'Стройпоиск' : analyzerHref ? 'Проверить документ' : 'Оценить проект';
   mobileActionBar.innerHTML = `<a href="tel:+73496453002">Позвонить</a><a href="${toolHref}">${toolLabel}</a>`;
   document.body.append(mobileActionBar);
+
+  if (!window.location.pathname.startsWith('/admin/')) {
+    const callDock = document.createElement('aside');
+    callDock.className = 'call-dock';
+    callDock.setAttribute('aria-label', 'Позвонить в ДНЕПР');
+    callDock.innerHTML = '<div class="call-dock-copy"><span>Есть объект или ТЗ?</span><strong>Обсудить напрямую</strong></div><a href="tel:+73496453002">Позвонить</a><button class="call-dock-close" type="button" aria-label="Закрыть">×</button>';
+    document.body.append(callDock);
+    let dockDismissed = false;
+    try { dockDismissed = window.sessionStorage.getItem('dnepr_call_dock_closed') === '1'; } catch (_) { dockDismissed = false; }
+    const updateCallDock = () => callDock.classList.toggle('is-visible', !dockDismissed && window.scrollY > Math.min(600, window.innerHeight * .65));
+    callDock.querySelector('.call-dock-close').addEventListener('click', () => {
+      dockDismissed = true;
+      callDock.classList.remove('is-visible');
+      try { window.sessionStorage.setItem('dnepr_call_dock_closed', '1'); } catch (_) { /* no-op */ }
+    });
+    updateCallDock();
+    window.addEventListener('scroll', updateCallDock, { passive: true });
+  }
 
   const revealItems = document.querySelectorAll('[data-reveal]');
   if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
@@ -193,11 +260,17 @@
   });
 
   document.querySelectorAll('[data-contact-form]').forEach((form) => {
-    const params = new URLSearchParams(window.location.search);
     const attribution = {
       page_url: window.location.href.slice(0, 500),
-      utm_source: (params.get('utm_source') || '').slice(0, 120),
-      utm_campaign: (params.get('utm_campaign') || '').slice(0, 160)
+      landing_page: (storedAttribution.landing_page || '').slice(0, 500),
+      referrer: (storedAttribution.referrer || '').slice(0, 500),
+      utm_source: (storedAttribution.utm_source || '').slice(0, 120),
+      utm_medium: (storedAttribution.utm_medium || '').slice(0, 120),
+      utm_campaign: (storedAttribution.utm_campaign || '').slice(0, 160),
+      utm_term: (storedAttribution.utm_term || '').slice(0, 160),
+      utm_content: (storedAttribution.utm_content || '').slice(0, 160),
+      gclid: (storedAttribution.gclid || '').slice(0, 200),
+      yclid: (storedAttribution.yclid || '').slice(0, 200)
     };
     Object.entries(attribution).forEach(([name, value]) => {
       if (form.elements.namedItem(name)) return;
@@ -206,6 +279,13 @@
       input.name = name;
       input.value = value;
       form.append(input);
+    });
+
+    let formStarted = false;
+    form.addEventListener('focusin', () => {
+      if (formStarted) return;
+      formStarted = true;
+      pushAnalytics('form_start', { form_source: form.querySelector('[name="source"]')?.value || 'Форма сайта', page_path: window.location.pathname });
     });
 
     const status = form.querySelector('.form-status');
@@ -229,9 +309,7 @@
         form.reset();
         status.textContent = result.message || 'Заявка отправлена. Мы свяжемся с вами.';
         status.classList.add('success');
-        window.dataLayer = window.dataLayer || [];
-        window.dataLayer.push({
-          event: 'generate_lead',
+        pushAnalytics('generate_lead', {
           form_source: form.querySelector('[name="source"]')?.value || 'Форма сайта',
           lead_id: result.lead_id || '',
           lead_score: Number(result.lead_score || 0),

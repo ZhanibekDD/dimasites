@@ -107,7 +107,15 @@ for marker in ("/dev/urandom", "admin.json", ".access.php", "password_hash", "ch
         errors.append(f"timeweb_setup_admin.sh: missing secure setup marker {marker}")
 
 main_js = (ROOT / "assets" / "js" / "main.js").read_text(encoding="utf-8")
-for marker in ("lead_id", "lead_score", "lead_priority"):
+for marker in (
+    "lead_id",
+    "lead_score",
+    "lead_priority",
+    "phone_click",
+    "form_start",
+    "utm_medium",
+    "landing_page",
+):
     if marker not in main_js:
         errors.append(f"main.js: missing lead analytics marker {marker}")
 
@@ -138,7 +146,7 @@ for page in ROOT.rglob("*.html"):
     if page.name == "404.html":
         continue
     content = page.read_text(encoding="utf-8")
-    if "/assets/js/main.js?v=20260811-lead1" not in content:
+    if "/assets/js/main.js?v=20260813-seo1" not in content:
         errors.append(f"{page.relative_to(ROOT)}: stale main.js cache version")
 
 sitemap = (ROOT / "sitemap.xml").read_text(encoding="utf-8") if (ROOT / "sitemap.xml").exists() else ""

@@ -74,13 +74,20 @@ if ! php -r 'exit(function_exists("curl_init") && class_exists("DOMDocument") ? 
     exit 1
 fi
 
+echo "Checking PHP syntax before any live files are changed..."
+find "${DEPLOY_REPOSITORY}/site" -type f -name '*.php' -print | while IFS= read -r php_file; do
+    php -l "${php_file}" >/dev/null
+done
+
 printf '%s\n' "$(git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD)" > "${DEPLOY_REPOSITORY}/site/.deploy-version"
 
 echo "Testing candidate against real FNS, EGRZ and EIS records..."
+echo "FNS, EIS and release integrity are blocking. EGRZ is monitored because its public search contract is unstable."
 if ! python3 "${DEPLOY_REPOSITORY}/scripts/production_smoke.py" \
     --document-root "${DEPLOY_REPOSITORY}/site" \
     --php-bin "$(command -v php)" \
     --expected-version "$(git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD)" \
+    --optional-source EGRZ \
     --report-json "${HOME}/dnepr-source-gate-latest.json"; then
     php "${DEPLOY_REPOSITORY}/scripts/source_runtime_probe.php" \
         > "${HOME}/dnepr-source-probe-latest.json" 2>&1 || true
