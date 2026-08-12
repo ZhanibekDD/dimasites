@@ -104,6 +104,9 @@ const ui = {
   companyProfileBody: document.querySelector('[data-company-profile-body]'),
   routes: document.querySelector('[data-source-routes]'),
   sourceCount: document.querySelector('[data-source-count]'),
+  sourceReport: document.querySelector('[data-source-report]'),
+  sourceReportSummary: document.querySelector('[data-source-report-summary]'),
+  sourceReportList: document.querySelector('[data-source-report-list]'),
   stage: document.querySelector('[data-project-stage]'),
   actionTitle: document.querySelector('[data-action-title]'),
   actionService: document.querySelector('[data-action-service]'),
@@ -440,40 +443,100 @@ async function fetchCompanyProfile(force = false) {
   }
 }
 
-function sourceResponseHtml(record) {
-  if (record.loading) {
-    return '<div class="source-live-result" data-state="loading"><span class="source-spinner"></span><div><strong>Запрос отправлен</strong><p>Ждём ответ официального источника…</p></div></div>';
-  }
-  const payload = record.response;
-  if (!payload) return '';
-  if (payload.ok === false) {
-    return `<div class="source-live-result" data-state="error"><b>!</b><div><strong>Источник не ответил</strong><p>${escapeHtml(payload.message || 'Временная ошибка официального источника.')}</p>${payload.diagnosticId ? `<small>Диагностика: ${escapeHtml(payload.diagnosticId)}</small>` : ''}</div></div>`;
-  }
-  const results = Array.isArray(payload.results) ? payload.results : [];
-  const sharedFiles = Array.isArray(payload.files) ? payload.files : [];
-  const cards = results.map((item) => {
-    const href = safeOfficialHref(item.url);
-    const documents = Array.isArray(item.documents) ? item.documents : [];
-    const documentLinks = documents.map((document) => {
+function formatSourceTime(value) {
+  const date = new Date(value || Date.now());
+  return Number.isNaN(date.getTime()) ? 'Время не указано' : date.toLocaleString('ru-RU');
+}
+
+function sourceRecordHtml(item, index) {
+  const details = [
+    ['Номер', item.number || item.id],
+    ['Статус', item.status],
+    ['Заказчик', item.customer],
+    ['Дата публикации', item.publishedAt],
+    ['Цена', item.price],
+  ].filter(([, value]) => value).map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join('');
+  const href = safeOfficialHref(item.url);
+  const documents = Array.isArray(item.documents) ? item.documents : [];
+  const links = [
+    href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Открыть официальную карточку <span>↗</span></a>` : '',
+    ...documents.map((document) => {
       const documentHref = safeOfficialHref(document.url);
-      return documentHref ? `<a href="${escapeHtml(documentHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.label || 'Документы')} <span>↗</span></a>` : '';
+      return documentHref ? `<a href="${escapeHtml(documentHref)}" target="_blank" rel="noopener noreferrer">${escapeHtml(document.label || 'Открыть документы')} <span>↗</span></a>` : '';
+    }),
+  ].filter(Boolean).join('');
+  return `<article class="report-record">
+    <header><span>ЗАПИСЬ ${String(index + 1).padStart(2, '0')}</span><h4>${escapeHtml(item.title || item.number || item.id || 'Официальная запись')}</h4></header>
+    ${details ? `<dl>${details}</dl>` : ''}
+    ${item.summary ? `<div class="report-record-summary"><strong>Сведения из ответа</strong><p>${escapeHtml(item.summary)}</p></div>` : ''}
+    ${links ? `<footer>${links}</footer>` : ''}
+  </article>`;
+}
+
+function sourceReportSectionHtml(record, index) {
+  const source = sources[record.id];
+  const payload = record.response;
+  const results = Array.isArray(payload?.results) ? payload.results : [];
+  const sharedFiles = Array.isArray(payload?.files) ? payload.files : [];
+  const checkedAt = formatSourceTime(payload?.source?.retrievedAt || record.checkedAt || active.createdAt);
+  let content = '';
+
+  if (record.id === 'fns-profile' && active.type === 'company') {
+    const companyCount = Array.isArray(active.companyProfile?.companies) ? active.companyProfile.companies.length : 0;
+    content = `<div class="report-notice" data-state="${escapeHtml(record.status)}"><div><strong>${escapeHtml(statusLabel(record.status))}</strong><p>${companyCount ? `Найдено компаний: ${companyCount}. ` : ''}Полная карточка, все поля ответа и документы ФНС показаны отдельным разделом выше.</p></div><a href="#company-profile-title">Перейти к ответу ФНС <span>↑</span></a></div>`;
+  } else if (record.loading) {
+    content = '<div class="report-notice" data-state="loading"><span class="source-spinner"></span><div><strong>Запрос выполняется</strong><p>Ждём ответ официального источника. Результат появится здесь без перезагрузки страницы.</p></div></div>';
+  } else if (payload?.ok === false) {
+    content = `<div class="report-notice" data-state="unavailable"><b>!</b><div><strong>Источник временно не ответил</strong><p>${escapeHtml(payload.message || 'Повторите проверку позже.')}</p>${payload.diagnosticId ? `<details><summary>Технические сведения</summary><code>${escapeHtml(payload.diagnosticId)}</code></details>` : ''}</div></div>`;
+  } else if (payload?.ok) {
+    const records = results.map(sourceRecordHtml).join('');
+    const fileLinks = sharedFiles.map((file) => {
+      const href = safeOfficialHref(file.url);
+      return href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.label || 'Выгрузка реестра')} <span>↓</span></a>` : '';
     }).filter(Boolean).join('');
-    const facts = [item.status, item.customer, item.publishedAt, item.price].filter(Boolean).map((value) => `<span>${escapeHtml(value)}</span>`).join('');
-    return `<article class="source-record"><div><small>${escapeHtml(item.number || item.id || 'ОФИЦИАЛЬНАЯ ЗАПИСЬ')}</small><h4>${escapeHtml(item.title || 'Найдена запись')}</h4>${facts ? `<p class="source-record-facts">${facts}</p>` : ''}<p>${escapeHtml(item.summary || '')}</p></div><footer>${href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Открыть карточку <span>↗</span></a>` : ''}${documentLinks}</footer></article>`;
-  }).join('');
-  const fileLinks = sharedFiles.map((file) => {
-    const href = safeOfficialHref(file.url);
-    return href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(file.label || 'Выгрузка реестра')} <span>↓</span></a>` : '';
-  }).filter(Boolean).join('');
-  const checkedAt = payload.source?.retrievedAt ? new Date(payload.source.retrievedAt).toLocaleString('ru-RU') : new Date().toLocaleString('ru-RU');
-  return `<div class="source-live-result" data-state="${results.length ? 'found' : 'missing'}"><div class="source-result-head"><div><span>ОТВЕТ ОФИЦИАЛЬНОГО ИСТОЧНИКА</span><strong>${results.length}</strong></div><p>${results.length ? `Показаны все ${results.length} записей текущего ответа.` : 'В текущем ответе записей нет. Это не доказывает отсутствие документа.'}</p><time>${escapeHtml(checkedAt)}</time></div>${cards ? `<div class="source-records">${cards}</div>` : ''}${fileLinks ? `<div class="source-files"><span>ФАЙЛЫ И ВЫГРУЗКИ</span>${fileLinks}</div>` : ''}<small class="source-diagnostic">${payload.diagnosticId ? `Диагностика: ${escapeHtml(payload.diagnosticId)} · ` : ''}${escapeHtml(payload.disclaimer || '')}</small></div>`;
+    content = `${results.length
+      ? `<div class="report-count"><strong>${results.length}</strong><p>Найдено записей в текущем ответе официального источника.</p></div><div class="report-record-list">${records}</div>`
+      : '<div class="report-empty"><strong>0 записей в текущем ответе</strong><p>Это не доказывает отсутствие документа или сведений в реестре.</p></div>'}
+      ${fileLinks ? `<div class="report-downloads"><strong>Файлы и выгрузки</strong><div>${fileLinks}</div></div>` : ''}
+      ${payload.disclaimer || payload.diagnosticId ? `<details class="report-technical"><summary>Источник и диагностика</summary><p>${escapeHtml(payload.disclaimer || '')}</p>${payload.diagnosticId ? `<code>${escapeHtml(payload.diagnosticId)}</code>` : ''}</details>` : ''}`;
+  } else {
+    content = `<div class="report-notice" data-state="${escapeHtml(record.status)}"><div><strong>${escapeHtml(statusLabel(record.status))}</strong><p>${record.note ? escapeHtml(record.note) : 'Автоматический ответ для этого источника ещё не получен.'}</p></div><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">Открыть источник <span>↗</span></a></div>`;
+  }
+
+  return `<section class="report-source" data-status="${escapeHtml(record.loading ? 'loading' : record.status)}">
+    <header><span>${String(index + 1).padStart(2, '0')}</span><div><small>${escapeHtml(source.host)}</small><h3>${escapeHtml(source.name)}</h3></div><div class="report-source-state"><b>${escapeHtml(record.loading ? 'Проверяем' : statusLabel(record.status))}</b><time>${escapeHtml(checkedAt)}</time></div></header>
+    <div class="report-source-body">${content}</div>
+  </section>`;
+}
+
+function renderSourceReport() {
+  if (!ui.sourceReport || !ui.sourceReportList || !ui.sourceReportSummary || !active) return;
+  const companyRecords = active.type === 'company' && active.companyProfile?.found && Array.isArray(active.companyProfile.companies)
+    ? active.companyProfile.companies.length
+    : 0;
+  const totals = active.sources.reduce((summary, record) => {
+    if (record.loading) summary.loading += 1;
+    else if (record.status === 'found') summary.found += 1;
+    else if (record.status === 'missing') summary.missing += 1;
+    else if (record.status === 'unavailable') summary.unavailable += 1;
+    else summary.pending += 1;
+    summary.records += Array.isArray(record.response?.results) ? record.response.results.length : 0;
+    return summary;
+  }, { found: 0, missing: 0, unavailable: 0, loading: 0, pending: 0, records: companyRecords });
+  ui.sourceReportSummary.innerHTML = `
+    <div><strong>${totals.records}</strong><span>записей</span></div>
+    <div><strong>${totals.found}</strong><span>источников с результатом</span></div>
+    <div><strong>${totals.missing}</strong><span>ответов без записей</span></div>
+    <div><strong>${totals.unavailable + totals.loading + totals.pending}</strong><span>требуют внимания</span></div>`;
+  ui.sourceReportList.innerHTML = active.sources.map(sourceReportSectionHtml).join('');
+  ui.sourceReport.hidden = false;
 }
 
 async function fetchRegistrySource(sourceId, force = false) {
   if (!active || !['egrz', 'eis'].includes(sourceId)) return;
   const record = active.sources.find((item) => item.id === sourceId);
   if (!record) return;
-  if (!force && record.response?.ok) return;
+  if (!force && record.response) return;
   const requestId = active.id;
   sourceRequestControllers.get(sourceId)?.abort();
   const controller = new AbortController();
@@ -541,7 +604,6 @@ function renderRoutes() {
       <div class="route-line"><span>${String(index + 1).padStart(2, '0')}</span><i></i><b>${escapeHtml(source.host)}</b></div>
       <div class="route-head"><div><small>Официальный источник</small><h3>${escapeHtml(source.name)}</h3></div><span class="evidence-grade">A*</span></div>
       <p>${escapeHtml(source.purpose)}</p>
-      <div class="route-instruction"><b>Как проверить</b><span>${escapeHtml(source.instruction)}</span></div>
       <div class="route-actions">
         ${isAutomaticFns
           ? '<button type="button" class="route-auto-check" data-company-route-check>Повторить автопроверку <span>↻</span></button>'
@@ -555,9 +617,8 @@ function renderRoutes() {
           <option value="unavailable">Источник недоступен</option>
         </select></label>
       </div>
-      ${sourceResponseHtml(record)}
-      <label class="route-note"><span>Идентификатор, ссылка или заметка</span><input data-source-note maxlength="300" placeholder="Например: номер записи или что нужно уточнить"></label>
-      <div class="route-proof"><span data-proof-status>${escapeHtml(statusLabel(record.status))}</span><time>${new Date(record.checkedAt || active.createdAt).toLocaleString('ru-RU')}</time></div>`;
+      <details class="route-manual"><summary>Ручная отметка и заметка</summary><label class="route-note"><span>Идентификатор, ссылка или заметка</span><input data-source-note maxlength="300" placeholder="Например: номер записи или что нужно уточнить"></label></details>
+      <div class="route-proof"><span data-proof-status>${escapeHtml(record.loading ? 'Проверяем' : statusLabel(record.status))}</span><time>${formatSourceTime(record.checkedAt || active.createdAt)}</time></div>`;
     const select = article.querySelector('[data-source-status]');
     const note = article.querySelector('[data-source-note]');
     select.value = record.status;
@@ -572,15 +633,18 @@ function renderRoutes() {
       article.querySelector('[data-proof-status]').textContent = statusLabel(record.status);
       article.querySelector('time').textContent = new Date(record.checkedAt).toLocaleString('ru-RU');
       persist();
+      renderSourceReport();
       updateLead();
     });
     note.addEventListener('change', () => {
       record.note = note.value.trim();
       persist();
+      renderSourceReport();
       updateLead();
     });
     ui.routes.append(article);
   });
+  renderSourceReport();
 }
 
 function updateAction() {
@@ -600,6 +664,7 @@ function updateLead() {
   const checked = active.sources.filter((item) => item.status !== 'unchecked');
   const lines = checked.map((item) => `${sources[item.id].name}: ${statusLabel(item.status)}${item.note ? ` — ${item.note}` : ''}`);
   const company = active.companyProfile?.companies?.[0];
+  const selectedStage = ui.stage.options?.[ui.stage.selectedIndex] || [...ui.stage.querySelectorAll('option')].find((option) => option.value === ui.stage.value);
   const companyLines = company ? [
     `Компания по данным ФНС: ${company.shortName || company.fullName}`,
     `ИНН / ОГРН: ${company.inn || '—'} / ${company.ogrn || '—'}`,
@@ -610,7 +675,7 @@ function updateLead() {
     `Запрос: ${active.query}`,
     `Тип: ${types[active.type].label}`,
     ...companyLines,
-    `Стадия: ${ui.stage.options[ui.stage.selectedIndex].text}`,
+    `Стадия: ${selectedStage?.text || selectedStage?.textContent || 'Не указана'}`,
     `Следующий шаг: ${active.nextAction || stageActions.company[0]}`,
     lines.length ? `Проверки:\n${lines.join('\n')}` : 'Официальные источники пока не отмечены пользователем.',
     'Сведения в заявке внесены пользователем; ДНЕПР не утверждает их без проверки первоисточника.',
