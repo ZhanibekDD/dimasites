@@ -320,7 +320,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
     header('Content-Disposition: attachment; filename="dnepr-leads-' . date('Y-m-d') . '.csv"');
     echo "\xEF\xBB\xBF";
     $output = fopen('php://output', 'w');
-    fputcsv($output, array('ID', 'Дата', 'Статус', 'Приоритет', 'Score', 'SLA', 'Имя', 'Телефон', 'Компания', 'E-mail', 'Источник', 'Страница', 'UTM source', 'UTM campaign', 'Задача'), ';');
+    fputcsv($output, array('ID', 'Дата', 'Статус', 'Приоритет', 'Score', 'SLA', 'Имя', 'Телефон', 'Компания', 'E-mail', 'Источник', 'Страница', 'Первая страница', 'Реферер', 'UTM source', 'UTM medium', 'UTM campaign', 'UTM term', 'UTM content', 'gclid', 'yclid', 'Задача'), ';');
     foreach ($leads as $lead) {
         $id = isset($lead['id']) ? $lead['id'] : '';
         fputcsv($output, csv_safe_row(array(
@@ -336,8 +336,15 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
             isset($lead['email']) ? $lead['email'] : '',
             isset($lead['source']) ? $lead['source'] : '',
             isset($lead['page_url']) ? $lead['page_url'] : '',
+            isset($lead['landing_page']) ? $lead['landing_page'] : '',
+            isset($lead['referrer']) ? $lead['referrer'] : '',
             isset($lead['utm_source']) ? $lead['utm_source'] : '',
+            isset($lead['utm_medium']) ? $lead['utm_medium'] : '',
             isset($lead['utm_campaign']) ? $lead['utm_campaign'] : '',
+            isset($lead['utm_term']) ? $lead['utm_term'] : '',
+            isset($lead['utm_content']) ? $lead['utm_content'] : '',
+            isset($lead['gclid']) ? $lead['gclid'] : '',
+            isset($lead['yclid']) ? $lead['yclid'] : '',
             isset($lead['message']) ? $lead['message'] : ''
         )), ';');
     }
@@ -376,7 +383,7 @@ if (isset($_GET['format']) && $_GET['format'] === 'csv') {
         ?>
           <article class="lead priority-<?php echo h($priority); ?> state-<?php echo h($state); ?>" id="<?php echo h($id); ?>">
             <div class="lead-top"><div><span class="priority"><?php echo h(priority_label($priority)); ?></span><b><?php echo h($id); ?></b><time><?php echo $created ? h(date('d.m.Y H:i', $created)) : '—'; ?></time></div><div><strong><?php echo h(isset($lead['score']) ? $lead['score'] : 0); ?><small>/100</small></strong><span class="due <?php echo h($due[0]); ?>"><?php echo h($due[1]); ?></span></div></div>
-            <div class="lead-grid"><dl><div><dt>Контакт</dt><dd><?php echo h(isset($lead['name']) ? $lead['name'] : '—'); ?></dd></div><div><dt>Телефон</dt><dd><a href="tel:<?php echo h(isset($lead['phone']) ? $lead['phone'] : ''); ?>"><?php echo h(isset($lead['phone']) ? $lead['phone'] : '—'); ?></a></dd></div><div><dt>Компания</dt><dd><?php echo h(!empty($lead['company']) ? $lead['company'] : 'не указана'); ?></dd></div><div><dt>E-mail</dt><dd><?php if (!empty($lead['email'])): ?><a href="mailto:<?php echo h($lead['email']); ?>"><?php echo h($lead['email']); ?></a><?php else: ?>не указан<?php endif; ?></dd></div><div><dt>Источник</dt><dd><?php echo h(!empty($lead['source']) ? $lead['source'] : 'Форма сайта'); ?></dd></div><div><dt>UTM</dt><dd><?php echo h(trim((isset($lead['utm_source']) ? $lead['utm_source'] : '') . ' / ' . (isset($lead['utm_campaign']) ? $lead['utm_campaign'] : ''), ' /')); ?></dd></div></dl><div class="lead-message"><span>Задача</span><p><?php echo nl2br(h(isset($lead['message']) ? $lead['message'] : '—')); ?></p></div></div>
+            <div class="lead-grid"><dl><div><dt>Контакт</dt><dd><?php echo h(isset($lead['name']) ? $lead['name'] : '—'); ?></dd></div><div><dt>Телефон</dt><dd><a href="tel:<?php echo h(isset($lead['phone']) ? $lead['phone'] : ''); ?>"><?php echo h(isset($lead['phone']) ? $lead['phone'] : '—'); ?></a></dd></div><div><dt>Компания</dt><dd><?php echo h(!empty($lead['company']) ? $lead['company'] : 'не указана'); ?></dd></div><div><dt>E-mail</dt><dd><?php if (!empty($lead['email'])): ?><a href="mailto:<?php echo h($lead['email']); ?>"><?php echo h($lead['email']); ?></a><?php else: ?>не указан<?php endif; ?></dd></div><div><dt>Источник</dt><dd><?php echo h(!empty($lead['source']) ? $lead['source'] : 'Форма сайта'); ?></dd></div><div><dt>Канал</dt><dd><?php $channel = trim((isset($lead['utm_source']) ? $lead['utm_source'] : '') . ' / ' . (isset($lead['utm_medium']) ? $lead['utm_medium'] : '') . ' / ' . (isset($lead['utm_campaign']) ? $lead['utm_campaign'] : ''), ' /'); echo h($channel !== '' ? $channel : 'прямой или не определён'); ?></dd></div><div><dt>Первая страница</dt><dd><?php echo h(!empty($lead['landing_page']) ? $lead['landing_page'] : (!empty($lead['page_url']) ? $lead['page_url'] : '—')); ?></dd></div><div><dt>Реферер</dt><dd><?php echo h(!empty($lead['referrer']) ? $lead['referrer'] : '—'); ?></dd></div></dl><div class="lead-message"><span>Задача</span><p><?php echo nl2br(h(isset($lead['message']) ? $lead['message'] : '—')); ?></p></div></div>
             <footer><span>Статус: <b><?php echo h(state_label($state)); ?></b></span><div><?php if ($state !== 'new'): ?><form method="post"><input type="hidden" name="csrf" value="<?php echo h($_SESSION['csrf']); ?>"><input type="hidden" name="lead_id" value="<?php echo h($id); ?>"><input type="hidden" name="state" value="new"><button type="submit">Вернуть в новые</button></form><?php endif; ?><?php if ($state !== 'contacted'): ?><form method="post"><input type="hidden" name="csrf" value="<?php echo h($_SESSION['csrf']); ?>"><input type="hidden" name="lead_id" value="<?php echo h($id); ?>"><input type="hidden" name="state" value="contacted"><button type="submit">Отметить контакт</button></form><?php endif; ?><?php if ($state !== 'closed'): ?><form method="post"><input type="hidden" name="csrf" value="<?php echo h($_SESSION['csrf']); ?>"><input type="hidden" name="lead_id" value="<?php echo h($id); ?>"><input type="hidden" name="state" value="closed"><button class="close" type="submit">Закрыть</button></form><?php endif; ?></div></footer>
           </article>
         <?php endforeach; ?>

@@ -3,8 +3,10 @@
 
 import importlib.util
 import json
+import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -52,6 +54,58 @@ class ProductionSmokeTests(unittest.TestCase):
             with open(path, "r", encoding="utf-8") as handle:
                 self.assertEqual(json.load(handle), expected)
             self.assertFalse(Path(path + ".tmp").exists())
+
+    def test_optional_source_failure_does_not_block_release(self):
+        results = [
+            {"name": "RELEASE", "status": "pass", "details": {}},
+            {"name": "FNS", "status": "pass", "details": {}},
+            {"name": "EGRZ", "status": "fail", "error": "integration_changed"},
+            {"name": "EIS", "status": "pass", "details": {}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            report_path = str(Path(directory) / "gate.json")
+            argv = [
+                "production_smoke.py",
+                "--document-root",
+                directory,
+                "--expected-version",
+                "release-1",
+                "--optional-source",
+                "EGRZ",
+                "--report-json",
+                report_path,
+            ]
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(
+                SMOKE, "execute_check", side_effect=results
+            ):
+                self.assertEqual(SMOKE.main(), 0)
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = json.load(handle)
+            self.assertTrue(report["passed"])
+            egrz = next(item for item in report["checks"] if item["name"] == "EGRZ")
+            self.assertFalse(egrz["blocking"])
+
+    def test_blocking_source_failure_rejects_release(self):
+        results = [
+            {"name": "RELEASE", "status": "pass", "details": {}},
+            {"name": "FNS", "status": "fail", "error": "transport"},
+            {"name": "EGRZ", "status": "fail", "error": "integration_changed"},
+            {"name": "EIS", "status": "pass", "details": {}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            argv = [
+                "production_smoke.py",
+                "--document-root",
+                directory,
+                "--expected-version",
+                "release-1",
+                "--optional-source",
+                "EGRZ",
+            ]
+            with mock.patch.object(sys, "argv", argv), mock.patch.object(
+                SMOKE, "execute_check", side_effect=results
+            ):
+                self.assertEqual(SMOKE.main(), 1)
 
 
 if __name__ == "__main__":

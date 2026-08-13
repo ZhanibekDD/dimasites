@@ -62,8 +62,15 @@ $message = clean((string)request_value($_POST, 'message'), 2500);
 $consent = (string)request_value($_POST, 'consent');
 $source = clean((string)request_value($_POST, 'source'), 120);
 $pageUrl = clean((string)request_value($_POST, 'page_url'), 500);
+$landingPage = clean((string)request_value($_POST, 'landing_page'), 500);
+$referrer = clean((string)request_value($_POST, 'referrer'), 500);
 $utmSource = clean((string)request_value($_POST, 'utm_source'), 120);
+$utmMedium = clean((string)request_value($_POST, 'utm_medium'), 120);
 $utmCampaign = clean((string)request_value($_POST, 'utm_campaign'), 160);
+$utmTerm = clean((string)request_value($_POST, 'utm_term'), 160);
+$utmContent = clean((string)request_value($_POST, 'utm_content'), 160);
+$gclid = clean((string)request_value($_POST, 'gclid'), 200);
+$yclid = clean((string)request_value($_POST, 'yclid'), 200);
 
 if ($name === '' || $phone === '' || $message === '' || $consent !== '1') {
     simple_respond(422, 'Заполните имя, телефон, описание задачи и подтвердите согласие.');
@@ -157,8 +164,15 @@ $leadRecord = array(
     'email' => $email,
     'source' => $source,
     'page_url' => $pageUrl,
+    'landing_page' => $landingPage,
+    'referrer' => $referrer,
     'utm_source' => $utmSource,
+    'utm_medium' => $utmMedium,
     'utm_campaign' => $utmCampaign,
+    'utm_term' => $utmTerm,
+    'utm_content' => $utmContent,
+    'gclid' => $gclid,
+    'yclid' => $yclid,
     'message' => $message,
     'ip_hash' => hash('sha256', $ip),
 );
@@ -178,7 +192,11 @@ $body = "Новая квалифицированная заявка с сайт�
     . "E-mail: " . ($email !== '' ? $email : 'не указан') . "\n\n"
     . "Источник: " . ($source !== '' ? $source : 'Форма сайта') . "\n"
     . "Страница: " . ($pageUrl !== '' ? $pageUrl : 'не указана') . "\n"
-    . "UTM: " . ($utmSource !== '' ? $utmSource : '—') . " / " . ($utmCampaign !== '' ? $utmCampaign : '—') . "\n\n"
+    . "Первая страница: " . ($landingPage !== '' ? $landingPage : 'не указана') . "\n"
+    . "Реферер: " . ($referrer !== '' ? $referrer : '—') . "\n"
+    . "UTM: " . ($utmSource !== '' ? $utmSource : '—') . " / " . ($utmMedium !== '' ? $utmMedium : '—') . " / " . ($utmCampaign !== '' ? $utmCampaign : '—') . "\n"
+    . "UTM term/content: " . ($utmTerm !== '' ? $utmTerm : '—') . " / " . ($utmContent !== '' ? $utmContent : '—') . "\n"
+    . "Click IDs: gclid=" . ($gclid !== '' ? $gclid : '—') . "; yclid=" . ($yclid !== '' ? $yclid : '—') . "\n\n"
     . "Задача:\n{$message}\n\n"
     . "Дата: " . date('d.m.Y H:i') . "\n";
 
