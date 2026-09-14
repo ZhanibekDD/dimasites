@@ -2,7 +2,10 @@
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlparse
+import json
+import re
 import sys
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1] / "site"
 
@@ -80,6 +83,11 @@ required = [
     ROOT / "assets" / "vendor" / "tesseract" / "core" / "tesseract-core-lstm.wasm",
     ROOT / "assets" / "vendor" / "tesseract" / "lang" / "rus.traineddata.gz",
     ROOT / "assets" / "vendor" / "tesseract" / "lang" / "eng.traineddata.gz",
+    ROOT / "organizations" / "index.html",
+    ROOT / "organizations" / "index.json",
+    ROOT / "organizations" / "voronezhskaya-oblast" / "index.html",
+    ROOT / "assets" / "css" / "organizations.css",
+    ROOT / "assets" / "js" / "organizations.js",
 ]
 for item in required:
     if not item.exists(): errors.append(f"missing required file: {item.name}")
@@ -150,9 +158,55 @@ for page in ROOT.rglob("*.html"):
         errors.append(f"{page.relative_to(ROOT)}: stale main.js cache version")
 
 sitemap = (ROOT / "sitemap.xml").read_text(encoding="utf-8") if (ROOT / "sitemap.xml").exists() else ""
+try:
+    sitemap_root = ET.fromstring(sitemap)
+    sitemap_urls = {
+        (child.text or "").strip()
+        for node in sitemap_root
+        for child in node
+        if child.tag.rsplit("}", 1)[-1] == "loc"
+    }
+except ET.ParseError as exc:
+    sitemap_urls = set()
+    errors.append(f"sitemap.xml: invalid XML: {exc}")
 for rel, canonical in canonical_urls:
-    if f"<loc>{canonical}</loc>" not in sitemap:
+    if canonical not in sitemap_urls:
         errors.append(f"{rel}: canonical URL is missing from sitemap.xml")
+
+directory_index = ROOT / "organizations" / "index.json"
+if directory_index.exists():
+    try:
+        directory_data = json.loads(directory_index.read_text(encoding="utf-8"))
+        directory_items = directory_data.get("items", [])
+    except (json.JSONDecodeError, OSError) as exc:
+        directory_items = []
+        errors.append(f"organizations/index.json: invalid directory data: {exc}")
+    if len(directory_items) < 100:
+        errors.append("organizations/index.json: unexpectedly small curated directory")
+    forbidden = re.compile(
+        r"автомойк|автосервис|шиномонтаж|автотехцентр|автоцентр|детейлинг|"
+        r"^\s*жк\b|жилой комплекс|новостройк|паспортн(?:ый|ого) стол|магазин цифровой|"
+        r"бытовой техник|магазин мототехники|велосипед|автоэмал|\bфаркоп|"
+        r"продуктовая компания|защита растений|агродрон|^\s*корма\s*$|\bсто кормов\b",
+        re.IGNORECASE,
+    )
+    for item in directory_items:
+        text = " ".join(str(item.get(key, "")) for key in ("name", "profile"))
+        if forbidden.search(text):
+            errors.append(f"organizations/index.json: irrelevant automotive entry remains: {item.get('name', '')}")
+            break
+
+profile_pages = 0
+for page in (ROOT / "organizations").rglob("index.html") if (ROOT / "organizations").exists() else []:
+    content = page.read_text(encoding="utf-8")
+    if 'class="org-profile-hero"' not in content:
+        continue
+    profile_pages += 1
+    for marker in ("Независимая справочная карточка", "ГК «ДНЕПР» не является представителем", "Что проверить перед обращением"):
+        if marker not in content:
+            errors.append(f"{page.relative_to(ROOT)}: missing organization transparency marker {marker}")
+if directory_index.exists() and profile_pages != len(directory_items):
+    errors.append(f"organizations: profile page count {profile_pages} does not match index count {len(directory_items)}")
 
 if errors:
     print("Site check failed:")
