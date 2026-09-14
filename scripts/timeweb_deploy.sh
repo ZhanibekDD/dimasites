@@ -111,6 +111,9 @@ DEPLOY_STARTED=1
 rsync -a --delete --exclude='.well-known/' --exclude='admin/.access.php' \
     "${DEPLOY_REPOSITORY}/site/" "${PUBLIC_DIRECTORY}/"
 
+cp "${DEPLOY_REPOSITORY}/verification/yandex_a48293f049e7a4da.html" \
+    "${PUBLIC_DIRECTORY}/yandex_a48293f049e7a4da.html"
+
 git -C "${DEPLOY_REPOSITORY}" rev-parse HEAD > "${PUBLIC_DIRECTORY}/.deploy-version"
 touch "${MANAGED_MARKER}"
 
