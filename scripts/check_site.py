@@ -41,9 +41,14 @@ def target_exists(value: str) -> bool:
     if path.endswith("/"): target = target / "index.html"
     return target.exists()
 
+def is_technical_html(page: Path) -> bool:
+    return page.parent == ROOT and page.name.startswith("yandex_")
+
 errors = []
 canonical_urls = []
 for page in ROOT.rglob("*.html"):
+    if is_technical_html(page):
+        continue
     parser = Parser()
     parser.feed(page.read_text(encoding="utf-8"))
     rel = page.relative_to(ROOT)
@@ -151,7 +156,7 @@ for page_name, content in (("about/index.html", about_html), ("projects/index.ht
         errors.append(f"{page_name}: schematic image remains where a real company photo is required")
 
 for page in ROOT.rglob("*.html"):
-    if page.name == "404.html":
+    if page.name == "404.html" or is_technical_html(page):
         continue
     content = page.read_text(encoding="utf-8")
     if "/assets/js/main.js?v=20260813-seo1" not in content:
