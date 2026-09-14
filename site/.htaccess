@@ -6,7 +6,6 @@ AddType application/wasm .wasm
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
-  RewriteRule ^yandex_a48293f049e7a4da\.html$ yandex_a48293f049e7a4da.php [L]
   RewriteCond %{HTTP:Authorization} ^(.+)
   RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
 </IfModule>
