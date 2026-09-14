@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a curated, static organization directory from the regional XLSX export."""
+"""Build curated, static SEO profile pages from the regional XLSX export."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ import datetime as dt
 import hashlib
 import html
 import json
-import math
 import re
 import shutil
 import sys
@@ -30,7 +29,7 @@ DOMAIN = "https://stroydnepr.ru"
 REGION = "Воронежская область"
 REGION_SLUG = "voronezhskaya-oblast"
 PAGE_SIZE = 80
-ASSET_VERSION = "20260914-org1"
+ASSET_VERSION = "20260914-org3"
 SOCIAL_OR_DIRECTORY_HOSTS = {
     "2gis.ru", "facebook.com", "google.com", "instagram.com", "linktr.ee", "ok.ru",
     "t.me", "taplink.cc", "telegram.me", "vk.com", "wa.me", "whatsapp.com", "x.com",
@@ -212,12 +211,11 @@ def page_head(title: str, description: str, canonical: str, structured_data: obj
 
 
 def header() -> str:
-    return """<body><a class="skip-link" href="#main">К содержанию</a><header class="site-header inner-header"><div class="container header-inner"><a class="brand" href="/" aria-label="ГК ДНЕПР — на главную"><img class="brand-mark" src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="46" height="46"><span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний · Муравленко</span></span></a><button class="menu-button" type="button" aria-expanded="false" aria-label="Открыть меню">☰</button><nav class="main-nav" aria-label="Основная навигация"><a href="/about/">Компания</a><a href="/services/">Услуги</a><a href="/projects/">Объекты</a><a href="/proverka/poisk/">Стройпоиск</a><a href="/organizations/" aria-current="page">Организации</a><a href="/contacts/">Контакты</a><a class="header-cta" href="/contacts/#request">Направить ТЗ</a></nav></div></header>"""
+    return """<body class="organization-profile-page"><a class="skip-link" href="#main">К содержанию</a><header class="site-header inner-header"><div class="container header-inner"><a class="brand" href="/" aria-label="ГК ДНЕПР — на главную"><img class="brand-mark" src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="46" height="46"><span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний · Муравленко</span></span></a><button class="menu-button" type="button" aria-expanded="false" aria-label="Открыть меню">☰</button><nav class="main-nav" aria-label="Основная навигация"><a href="/about/">Компания</a><a href="/services/">Услуги</a><a href="/projects/">Объекты</a><a href="/proverka/poisk/">Стройпоиск</a><a href="/contacts/">Контакты</a><a class="header-cta" href="/contacts/#request">Направить ТЗ</a></nav></div></header>"""
 
 
-def footer(include_search: bool = False) -> str:
-    search_script = f'<script src="/assets/js/organizations.js?v={ASSET_VERSION}" defer></script>' if include_search else ""
-    return f"""<footer class="site-footer"><div class="container"><div class="footer-main"><div class="footer-about"><a class="brand" href="/"><img class="brand-mark" src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="46" height="46"><span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний</span></span></a><p>Строительство, монтаж и проектирование промышленных и гражданских объектов.</p></div><div class="footer-column"><h3>Разделы</h3><nav><a href="/about/">Компания</a><a href="/services/">Услуги</a><a href="/projects/">Объекты</a><a href="/organizations/">Организации</a></nav></div><div class="footer-column"><h3>Инструменты</h3><nav><a href="/proverka/">Проверка документа</a><a href="/proverka/poisk/">Стройпоиск</a><a href="/knowledge/">База знаний</a></nav></div><div class="footer-column"><h3>Контакты</h3><address><a href="tel:+73496453002">+7 (3496) 45-30-02</a><a href="mailto:office@stroydnepr.ru">office@stroydnepr.ru</a><span>г. Муравленко, ул. Нефтяников, 84</span></address></div></div><div class="footer-bottom"><span>© 2026 ООО «ДНЕПР»</span><a href="/privacy/">Политика конфиденциальности</a></div></div></footer>{search_script}<script src="/assets/js/main.js?v=20260813-seo1" defer></script></body></html>"""
+def footer() -> str:
+    return """<footer class="site-footer"><div class="container"><div class="footer-main"><div class="footer-about"><a class="brand" href="/"><img class="brand-mark" src="/assets/images/logo-v2.svg?v=20260811-snow2" alt="" width="46" height="46"><span class="brand-copy"><strong>ДНЕПР</strong><span>Группа компаний</span></span></a><p>Строительство, монтаж и проектирование промышленных и гражданских объектов.</p></div><div class="footer-column"><h3>Разделы</h3><nav><a href="/about/">Компания</a><a href="/services/">Услуги</a><a href="/projects/">Объекты</a><a href="/contacts/">Контакты</a></nav></div><div class="footer-column"><h3>Инструменты</h3><nav><a href="/proverka/">Проверка документа</a><a href="/proverka/poisk/">Стройпоиск</a><a href="/knowledge/">База знаний</a></nav></div><div class="footer-column"><h3>Контакты</h3><address><a href="tel:+73496453002">+7 (3496) 45-30-02</a><a href="mailto:office@stroydnepr.ru">office@stroydnepr.ru</a><span>г. Муравленко, ул. Нефтяников, 84</span></address></div></div><div class="footer-bottom"><span>© 2026 ООО «ДНЕПР»</span><a href="/privacy/">Политика конфиденциальности</a></div></div></footer><script src="/assets/js/main.js?v=20260813-seo1" defer></script></body></html>"""
 
 
 def breadcrumbs(items: list[tuple[str, str | None]]) -> str:
@@ -252,22 +250,24 @@ def map_link(item: dict) -> str:
     return f"https://www.openstreetmap.org/?mlat={lat:.6f}&mlon={lon:.6f}#map=16/{lat:.6f}/{lon:.6f}"
 
 
-def company_page(item: dict, generated_label: str) -> str:
+def company_page(item: dict, generated_date: str) -> str:
     canonical = DOMAIN + item["url"]
     primary = GROUPS[item["groups"][0]]
-    description = f"{item['name']}: {primary['short']}. {item['city']}, {item['address']}. Телефон, сайт и профиль организации в строительном справочнике."
+    description = f"{item['name']}, {item['city']}: адрес, телефон, сайт, режим работы и направления деятельности. {primary['short'].capitalize()}."
     phone = item["phones"][0]
     website_host = urllib.parse.urlsplit(item["website"]).hostname or item["website"]
+    generated_label = dt.date.fromisoformat(generated_date).strftime("%d.%m.%Y")
+    title_class = "org-title-very-long" if len(item["name"]) > 80 else "org-title-long" if len(item["name"]) > 55 else ""
     categories = "".join(f"<li>{esc(category)}</li>" for category in item["categories"])
     group_tags = "".join(f"<span>{esc(GROUPS[group]['label'])}</span>" for group in item["groups"])
-    fits = "".join(f"<p>{esc(GROUPS[group]['fit'])}</p>" for group in item["groups"])
-    hours = f'<div><dt>Режим работы</dt><dd>{esc(item["hours"])}</dd></div>' if item["hours"] else ""
+    fits = "".join(f"<li>{esc(GROUPS[group]['fit'])}</li>" for group in item["groups"])
+    hours_parts = [part.strip() for part in re.split(r",\s*(?=[А-ЯЁ][а-яё]{1,2}:)", item["hours"])] if item["hours"] else []
+    hours = f'<div><dt>Режим работы</dt><dd class="org-hours">{"".join(f"<span>{esc(part)}</span>" for part in hours_parts)}</dd></div>' if hours_parts else ""
     postal = f'<meta itemprop="postalCode" content="{esc(item["postal_code"])}">' if item["postal_code"] else ""
-    district_url = f"/organizations/{REGION_SLUG}/{item['district_slug']}/"
     schema_items = [
         {
             "@type": "WebPage", "@id": canonical, "url": canonical, "name": item["name"],
-            "description": description, "inLanguage": "ru-RU", "dateModified": generated_label,
+            "description": description, "inLanguage": "ru-RU", "dateModified": generated_date,
             "isPartOf": {"@id": DOMAIN + "/#website"}, "publisher": {"@id": DOMAIN + "/#organization"},
             "about": {"@id": canonical + "#listed-organization"},
         },
@@ -279,16 +279,17 @@ def company_page(item: dict, generated_label: str) -> str:
                 "addressRegion": REGION, "postalCode": item["postal_code"] or None, "addressCountry": "RU",
             },
         },
-        breadcrumb_schema([
-            ("Главная", "/"), ("Организации", "/organizations/"), (REGION, f"/organizations/{REGION_SLUG}/"),
-            (item["district"], district_url), (item["name"], item["url"]),
-        ]),
+        breadcrumb_schema([("Главная", "/"), (item["name"], item["url"])]),
     ]
     content = f"""{page_head(f"{item['name']} — {item['city']}: контакты и профиль", description, canonical, {"@context": "https://schema.org", "@graph": schema_items})}{header()}
-<main id="main"><section class="org-profile-hero"><div class="container">{breadcrumbs([("Главная", "/"), ("Организации", "/organizations/"), (REGION, f"/organizations/{REGION_SLUG}/"), (item["district"], district_url), (item["name"], None)])}<p class="eyebrow light">Строительный справочник · {esc(item['district'])}</p><h1>{esc(item['name'])}</h1><p class="org-profile-lead">{esc(primary['label'])} · {esc(item['city'])}</p><div class="org-profile-tags">{group_tags}</div><div class="org-independent-note"><strong>Независимая справочная карточка.</strong> ГК «ДНЕПР» не является представителем, филиалом или владельцем этой организации.</div></div></section>
-<section class="section org-profile-section"><div class="container org-profile-layout"><article class="org-profile-main"><p class="eyebrow">Сведения об организации</p><h2>Контакты и профиль</h2><dl class="org-facts"><div><dt>Организация</dt><dd>{esc(item['name'])}</dd></div><div><dt>Адрес</dt><dd itemprop="address">{esc(item['city'])}, {esc(item['address'])}{postal}</dd></div><div><dt>Район</dt><dd><a href="{esc(district_url)}">{esc(item['district'])}</a></dd></div>{hours}</dl><h2>Профиль деятельности</h2><ul class="org-category-list">{categories}</ul><div class="org-fit-copy">{fits}</div><h2>Что проверить перед обращением</h2><p>Контакты, режим работы и перечень услуг могут меняться. Уточните актуальные сведения по телефону или на указанном сайте организации. Карточка сформирована по справочным данным, переданным владельцу сайта, и обновлена {esc(generated_label)}.</p></article>
-<aside class="org-contact-card"><span>Контакты из справочной записи</span><a class="org-phone" href="tel:{esc(phone['href'])}">{esc(phone['label'])}</a><a class="button button-primary" href="{esc(item['website'])}" target="_blank" rel="noopener noreferrer">Сайт организации <span class="arrow">↗</span></a><small>{esc(website_host)}</small><a class="org-map-link" href="{esc(map_link(item))}" target="_blank" rel="noopener noreferrer">Показать адрес на карте</a><p>Перед визитом подтвердите адрес и время работы.</p></aside></div></section>
-<section class="org-dnepr-cta"><div class="container"><div><p class="eyebrow light">ГК «ДНЕПР»</p><h2>Нужен подрядчик на проектирование или строительство?</h2><p>Оценим исходные данные, объём работ и следующий шаг по промышленному или гражданскому объекту.</p></div><div><a class="button button-primary" href="/contacts/#request">Обсудить объект <span class="arrow">↗</span></a><a href="tel:+73496453002" class="org-dnepr-phone">+7 (3496) 45-30-02</a></div></div></section></main>{footer()}"""
+<main id="main">
+<section class="org-profile-hero"><div class="container">{breadcrumbs([("Главная", "/"), (item["name"], None)])}<div class="org-hero-copy"><p class="eyebrow light">Справочная карточка · {esc(item['district'])}</p><h1 class="{title_class}">{esc(item['name'])}</h1><p class="org-profile-lead">{esc(primary['label'])}<span aria-hidden="true">·</span>{esc(item['city'])}</p><div class="org-profile-tags">{group_tags}</div><div class="org-independent-note" role="note"><span>Важно</span><p><strong>Независимая справочная карточка.</strong> ГК «ДНЕПР» не является представителем, филиалом или владельцем этой организации.</p></div></div></div></section>
+<section class="org-profile-section"><div class="container org-profile-layout"><article class="org-profile-main"><section class="org-content-card org-contact-details-card" aria-labelledby="org-details-title"><p class="eyebrow">Всё в одном месте</p><h2 id="org-details-title">Контакты и сведения об организации</h2><div class="org-contact-primary"><div><span class="org-contact-label">Телефон организации</span><a class="org-phone" href="tel:{esc(phone['href'])}">{esc(phone['label'])}</a></div><div class="org-contact-actions"><a class="org-action org-action--primary" href="{esc(item['website'])}" target="_blank" rel="noopener noreferrer">Открыть сайт <span>↗</span></a><a class="org-action org-action--secondary" href="{esc(map_link(item))}" target="_blank" rel="noopener noreferrer">Показать на карте</a></div></div><small class="org-contact-source">Сайт: {esc(website_host)} · перед визитом уточните данные</small><dl class="org-facts"><div><dt>Организация</dt><dd>{esc(item['name'])}</dd></div><div><dt>Адрес</dt><dd itemprop="address">{esc(item['city'])}, {esc(item['address'])}{postal}</dd></div><div><dt>Район</dt><dd>{esc(item['district'])}</dd></div>{hours}</dl></section>
+<section class="org-content-card" aria-labelledby="org-profile-title"><p class="eyebrow">Направления</p><h2 id="org-profile-title">Чем занимается организация</h2><ul class="org-category-list">{categories}</ul><ul class="org-fit-list">{fits}</ul></section>
+<section class="org-check-card" aria-labelledby="org-check-title"><div class="org-check-icon" aria-hidden="true">✓</div><div><h2 id="org-check-title">Что проверить перед обращением</h2><p>Контакты, режим работы и перечень услуг могут меняться. Уточните актуальные сведения по телефону или на официальном сайте организации. Карточка обновлена {esc(generated_label)}.</p></div></section></article>
+<aside class="org-dnepr-card" aria-label="Реклама услуг ГК ДНЕПР"><span class="org-ad-label">Реклама · ГК «ДНЕПР»</span><p class="org-dnepr-kicker">Строительно-монтажная компания</p><h2>Нужен подрядчик на объект?</h2><p>Берём на себя проектирование, строительство и монтаж промышленных и гражданских объектов.</p><ul><li>Проектирование и экспертиза</li><li>Строительно-монтажные работы</li><li>Генподряд и собственная техника</li></ul><a class="button button-primary" href="/contacts/#request">Обсудить задачу <span class="arrow">↗</span></a><a class="org-dnepr-phone" href="tel:+73496453002">+7 (3496) 45-30-02</a><a class="org-dnepr-more" href="/services/">Посмотреть услуги ДНЕПР →</a><small>Это предложение ГК «ДНЕПР», а не организации «{esc(item['name'])}».</small></aside></div></section>
+<section class="org-dnepr-band"><div class="container"><div><span>ГК «ДНЕПР»</span><h2>От исходных данных до ввода объекта</h2></div><div class="org-dnepr-band-copy"><p>Поможем оценить объём работ, собрать техническое задание и определить следующий шаг по проекту.</p><a class="button button-primary" href="/contacts/#request">Получить консультацию <span class="arrow">↗</span></a></div></div></section>
+<nav class="org-mobile-actions" aria-label="Быстрые действия"><a href="tel:{esc(phone['href'])}">Позвонить</a><a href="{esc(item['website'])}" target="_blank" rel="noopener noreferrer">Сайт</a><a href="/contacts/#request">Услуги ДНЕПР</a></nav></main>{footer()}"""
     return content
 
 
@@ -379,7 +380,7 @@ def root_page(records: list[dict]) -> tuple[str, str]:
         {"@type": "CollectionPage", "@id": canonical, "url": canonical, "name": "Строительный справочник организаций", "description": description, "inLanguage": "ru-RU", "isPartOf": {"@id": DOMAIN + "/#website"}, "publisher": {"@id": DOMAIN + "/#organization"}},
         breadcrumb_schema([("Главная", "/"), ("Организации", url)]),
     ]}
-    content = f"""{page_head("Строительный справочник организаций — ГК «ДНЕПР»", description, canonical, structured)}{header()}<main id="main"><section class="org-directory-hero"><div class="container">{breadcrumbs([("Главная", "/"), ("Организации", None)])}<p class="eyebrow light">Каталог для строительных проектов</p><h1>Организации строительного профиля</h1><p>Поиск по отобранным подрядчикам, проектировщикам, поставщикам, инженерным организациям и операторам инфраструктуры.</p><div class="org-hero-metrics"><div><strong>{len(records)}</strong><span>организаций</span></div><div><strong>{len(districts)}</strong><span>района и округа</span></div><div><strong>{len(GROUPS)}</strong><span>профильных направлений</span></div></div></div></section><section class="org-search-section"><div class="container"><div class="org-search-panel"><label for="organization-search">Найти организацию</label><div><input id="organization-search" type="search" minlength="2" autocomplete="off" placeholder="Название, город или профиль"><button type="button" data-organization-search-button>Найти</button></div><p data-organization-search-status>Введите минимум два символа.</p><div class="org-search-results" data-organization-search-results></div><noscript><p>Для поиска включите JavaScript или откройте <a href="/organizations/{REGION_SLUG}/">каталог Воронежской области</a>.</p></noscript></div></div></section><section class="section"><div class="container"><div class="section-head org-section-head"><div><p class="eyebrow">Что включено</p><h2 class="section-title">Только профильные направления</h2></div><p class="section-lead">Автомойки, автосервисы, кафе, магазины одежды, салоны и другие непрофильные организации отсечены до публикации.</p></div><div class="org-purpose-grid">{group_cards}</div><a class="button button-primary org-region-button" href="/organizations/{REGION_SLUG}/">Открыть Воронежскую область <span class="arrow">↗</span></a><div class="org-directory-note"><strong>Важно</strong><p>Это независимый справочный раздел. ГК «ДНЕПР» не представляет перечисленные организации. Контакты нужно подтверждать на сайтах самих организаций.</p></div></div></section></main>{footer(include_search=True)}"""
+    content = f"""{page_head("Строительный справочник организаций — ГК «ДНЕПР»", description, canonical, structured)}{header()}<main id="main"><section class="org-directory-hero"><div class="container">{breadcrumbs([("Главная", "/"), ("Организации", None)])}<p class="eyebrow light">Каталог для строительных проектов</p><h1>Организации строительного профиля</h1><p>Поиск по отобранным подрядчикам, проектировщикам, поставщикам, инженерным организациям и операторам инфраструктуры.</p><div class="org-hero-metrics"><div><strong>{len(records)}</strong><span>организаций</span></div><div><strong>{len(districts)}</strong><span>района и округа</span></div><div><strong>{len(GROUPS)}</strong><span>профильных направлений</span></div></div></div></section><section class="org-search-section"><div class="container"><div class="org-search-panel"><label for="organization-search">Найти организацию</label><div><input id="organization-search" type="search" minlength="2" autocomplete="off" placeholder="Название, город или профиль"><button type="button" data-organization-search-button>Найти</button></div><p data-organization-search-status>Введите минимум два символа.</p><div class="org-search-results" data-organization-search-results></div><noscript><p>Для поиска включите JavaScript или откройте <a href="/organizations/{REGION_SLUG}/">каталог Воронежской области</a>.</p></noscript></div></div></section><section class="section"><div class="container"><div class="section-head org-section-head"><div><p class="eyebrow">Что включено</p><h2 class="section-title">Только профильные направления</h2></div><p class="section-lead">Автомойки, автосервисы, кафе, магазины одежды, салоны и другие непрофильные организации отсечены до публикации.</p></div><div class="org-purpose-grid">{group_cards}</div><a class="button button-primary org-region-button" href="/organizations/{REGION_SLUG}/">Открыть Воронежскую область <span class="arrow">↗</span></a><div class="org-directory-note"><strong>Важно</strong><p>Это независимый справочный раздел. ГК «ДНЕПР» не представляет перечисленные организации. Контакты нужно подтверждать на сайтах самих организаций.</p></div></div></section></main>{footer()}"""
     return url, content
 
 
@@ -473,11 +474,12 @@ def write_report(path: Path, records: list[dict], rejected: collections.Counter,
 
 ## Публикационная модель
 
-- Главная страница справочника содержит поиск по названию, городу и профилю.
-- Страница региона ведёт к отдельным страницам районов и городских округов.
-- Внутри района организации распределены по пяти профильным направлениям и разбиты на страницы по 80 записей.
-- Каждая организация получает собственный постоянный URL, фактические контактные сведения, ссылку на указанный сайт и явное уведомление, что карточка не является официальным сайтом организации.
-- В sitemap включаются только записи, прошедшие фильтр.
+- Публичный каталог, страницы районов и ссылки на организации из навигации сайта не создаются.
+- Каждая организация получает только собственный постоянный URL для переходов из поисковых систем.
+- Телефон, сайт, карта, адрес, район, режим работы и название организации собраны в одной карточке, чтобы посетитель не путался.
+- Единая карточка сведений визуально отделена от рекламного предложения ГК «ДНЕПР».
+- Карточка содержит фактические контактные сведения, ссылку на указанный сайт и явное уведомление, что страница не является официальным сайтом организации.
+- В sitemap включаются только отдельные карточки, прошедшие фильтр.
 """
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(report, encoding="utf-8", newline="\n")
@@ -505,39 +507,14 @@ def main() -> None:
     target.mkdir(parents=True)
 
     sitemap_urls: list[tuple[str, str, str]] = []
-    generated_label = dt.date.fromisoformat(args.date).strftime("%d.%m.%Y")
-
-    root_url, root_content = root_page(records)
-    write_url(site, root_url, root_content)
-    sitemap_urls.append((root_url, "weekly", "0.8"))
-
-    region_url, region_content = region_page(records)
-    write_url(site, region_url, region_content)
-    sitemap_urls.append((region_url, "weekly", "0.8"))
-
     by_district = collections.defaultdict(list)
     for item in records:
         by_district[item["district"]].append(item)
 
-    for district, district_items in sorted(by_district.items(), key=lambda pair: pair[0].casefold()):
-        url, content = district_page(district, district_items)
-        write_url(site, url, content)
-        sitemap_urls.append((url, "monthly", "0.7"))
-        for group in GROUPS:
-            group_items = [item for item in district_items if group in item["groups"]]
-            if not group_items:
-                continue
-            pages = math.ceil(len(group_items) / PAGE_SIZE)
-            for page in range(1, pages + 1):
-                url, content = listing_page(district, district_items[0]["district_slug"], group, group_items, page, pages)
-                write_url(site, url, content)
-                sitemap_urls.append((url, "monthly", "0.6"))
-
     for item in records:
-        write_url(site, item["url"], company_page(item, generated_label))
+        write_url(site, item["url"], company_page(item, args.date))
         sitemap_urls.append((item["url"], "yearly", "0.5"))
 
-    write_search_index(target / "index.json", records, args.date)
     core = read_core_sitemap(site / "sitemap.xml")
     write_sitemap(site / "sitemap.xml", core, args.date, sitemap_urls)
     write_report(args.report, records, rejected, raw_rows, duplicates, args.date)
@@ -546,7 +523,7 @@ def main() -> None:
         "source_rows": raw_rows,
         "published_organizations": len(records),
         "districts": len(by_district),
-        "directory_urls": len(sitemap_urls),
+        "profile_urls": len(sitemap_urls),
         "rejected": rejected,
         "duplicates": duplicates,
     }, ensure_ascii=False, indent=2))

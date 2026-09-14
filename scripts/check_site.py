@@ -88,11 +88,8 @@ required = [
     ROOT / "assets" / "vendor" / "tesseract" / "core" / "tesseract-core-lstm.wasm",
     ROOT / "assets" / "vendor" / "tesseract" / "lang" / "rus.traineddata.gz",
     ROOT / "assets" / "vendor" / "tesseract" / "lang" / "eng.traineddata.gz",
-    ROOT / "organizations" / "index.html",
-    ROOT / "organizations" / "index.json",
-    ROOT / "organizations" / "voronezhskaya-oblast" / "index.html",
+    ROOT / "organizations",
     ROOT / "assets" / "css" / "organizations.css",
-    ROOT / "assets" / "js" / "organizations.js",
 ]
 for item in required:
     if not item.exists(): errors.append(f"missing required file: {item.name}")
@@ -178,40 +175,38 @@ for rel, canonical in canonical_urls:
     if canonical not in sitemap_urls:
         errors.append(f"{rel}: canonical URL is missing from sitemap.xml")
 
-directory_index = ROOT / "organizations" / "index.json"
-if directory_index.exists():
-    try:
-        directory_data = json.loads(directory_index.read_text(encoding="utf-8"))
-        directory_items = directory_data.get("items", [])
-    except (json.JSONDecodeError, OSError) as exc:
-        directory_items = []
-        errors.append(f"organizations/index.json: invalid directory data: {exc}")
-    if len(directory_items) < 100:
-        errors.append("organizations/index.json: unexpectedly small curated directory")
-    forbidden = re.compile(
-        r"автомойк|автосервис|шиномонтаж|автотехцентр|автоцентр|детейлинг|"
-        r"^\s*жк\b|жилой комплекс|новостройк|паспортн(?:ый|ого) стол|магазин цифровой|"
-        r"бытовой техник|магазин мототехники|велосипед|автоэмал|\bфаркоп|"
-        r"продуктовая компания|защита растений|агродрон|^\s*корма\s*$|\bсто кормов\b",
-        re.IGNORECASE,
-    )
-    for item in directory_items:
-        text = " ".join(str(item.get(key, "")) for key in ("name", "profile"))
-        if forbidden.search(text):
-            errors.append(f"organizations/index.json: irrelevant automotive entry remains: {item.get('name', '')}")
-            break
-
+forbidden_organization_name = re.compile(
+    r"автомойк|автосервис|шиномонтаж|автотехцентр|автоцентр|детейлинг|"
+    r"^\s*жк\b|жилой комплекс|новостройк|паспортн(?:ый|ого) стол|магазин цифровой|"
+    r"бытовой техник|магазин мототехники|велосипед|автоэмал|\bфаркоп|"
+    r"продуктовая компания|защита растений|агродрон|^\s*корма\s*$|\bсто кормов\b",
+    re.IGNORECASE,
+)
 profile_pages = 0
 for page in (ROOT / "organizations").rglob("index.html") if (ROOT / "organizations").exists() else []:
     content = page.read_text(encoding="utf-8")
     if 'class="org-profile-hero"' not in content:
         continue
     profile_pages += 1
-    for marker in ("Независимая справочная карточка", "ГК «ДНЕПР» не является представителем", "Что проверить перед обращением"):
+    for marker in ("Независимая справочная карточка", "ГК «ДНЕПР» не является представителем", "Что проверить перед обращением", "Реклама · ГК «ДНЕПР»"):
         if marker not in content:
             errors.append(f"{page.relative_to(ROOT)}: missing organization transparency marker {marker}")
-if directory_index.exists() and profile_pages != len(directory_items):
-    errors.append(f"organizations: profile page count {profile_pages} does not match index count {len(directory_items)}")
+    if content.count('class="org-content-card org-contact-details-card"') != 1:
+        errors.append(f"{page.relative_to(ROOT)}: organization details must be grouped in one contact card")
+    if 'class="org-quick-card"' in content:
+        errors.append(f"{page.relative_to(ROOT)}: obsolete separate quick-contact card remains")
+    for marker in ("Телефон организации", "Открыть сайт", "Показать на карте", "Организация", "Адрес", "Район"):
+        if marker not in content:
+            errors.append(f"{page.relative_to(ROOT)}: unified organization card is missing {marker}")
+    name_match = re.search(r'<h1(?:\s+[^>]*)?>([^<]+)</h1>', content)
+    if name_match and forbidden_organization_name.search(name_match.group(1)):
+        errors.append(f"{page.relative_to(ROOT)}: irrelevant organization profile remains: {name_match.group(1)}")
+if profile_pages < 100:
+    errors.append(f"organizations: unexpectedly small curated profile set ({profile_pages})")
+if (ROOT / "organizations" / "index.html").exists():
+    errors.append("organizations: public directory root must not be generated")
+if 'href="/organizations/"' in (ROOT / "index.html").read_text(encoding="utf-8"):
+    errors.append("index.html: organization directory link must not appear on the home page")
 
 if errors:
     print("Site check failed:")
