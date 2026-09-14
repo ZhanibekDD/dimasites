@@ -29,7 +29,7 @@ DOMAIN = "https://stroydnepr.ru"
 REGION = "Воронежская область"
 REGION_SLUG = "voronezhskaya-oblast"
 PAGE_SIZE = 80
-ASSET_VERSION = "20260914-org3"
+ASSET_VERSION = "20260914-org4"
 SOCIAL_OR_DIRECTORY_HOSTS = {
     "2gis.ru", "facebook.com", "google.com", "instagram.com", "linktr.ee", "ok.ru",
     "t.me", "taplink.cc", "telegram.me", "vk.com", "wa.me", "whatsapp.com", "x.com",
@@ -250,6 +250,13 @@ def map_link(item: dict) -> str:
     return f"https://www.openstreetmap.org/?mlat={lat:.6f}&mlon={lon:.6f}#map=16/{lat:.6f}/{lon:.6f}"
 
 
+def map_embed_link(item: dict) -> str:
+    lat, lon = item["latitude"], item["longitude"]
+    bbox = f"{lon - 0.012:.6f},{lat - 0.007:.6f},{lon + 0.012:.6f},{lat + 0.007:.6f}"
+    query = urllib.parse.urlencode({"bbox": bbox, "layer": "mapnik", "marker": f"{lat:.6f},{lon:.6f}"})
+    return f"https://www.openstreetmap.org/export/embed.html?{query}"
+
+
 def company_page(item: dict, generated_date: str) -> str:
     canonical = DOMAIN + item["url"]
     primary = GROUPS[item["groups"][0]]
@@ -284,7 +291,7 @@ def company_page(item: dict, generated_date: str) -> str:
     content = f"""{page_head(f"{item['name']} — {item['city']}: контакты и профиль", description, canonical, {"@context": "https://schema.org", "@graph": schema_items})}{header()}
 <main id="main">
 <section class="org-profile-hero"><div class="container">{breadcrumbs([("Главная", "/"), (item["name"], None)])}<div class="org-hero-copy"><p class="eyebrow light">Справочная карточка · {esc(item['district'])}</p><h1 class="{title_class}">{esc(item['name'])}</h1><p class="org-profile-lead">{esc(primary['label'])}<span aria-hidden="true">·</span>{esc(item['city'])}</p><div class="org-profile-tags">{group_tags}</div><div class="org-independent-note" role="note"><span>Важно</span><p><strong>Независимая справочная карточка.</strong> ГК «ДНЕПР» не является представителем, филиалом или владельцем этой организации.</p></div></div></div></section>
-<section class="org-profile-section"><div class="container org-profile-layout"><article class="org-profile-main"><section class="org-content-card org-contact-details-card" aria-labelledby="org-details-title"><p class="eyebrow">Всё в одном месте</p><h2 id="org-details-title">Контакты и сведения об организации</h2><div class="org-contact-primary"><div><span class="org-contact-label">Телефон организации</span><a class="org-phone" href="tel:{esc(phone['href'])}">{esc(phone['label'])}</a></div><div class="org-contact-actions"><a class="org-action org-action--primary" href="{esc(item['website'])}" target="_blank" rel="noopener noreferrer">Открыть сайт <span>↗</span></a><a class="org-action org-action--secondary" href="{esc(map_link(item))}" target="_blank" rel="noopener noreferrer">Показать на карте</a></div></div><small class="org-contact-source">Сайт: {esc(website_host)} · перед визитом уточните данные</small><dl class="org-facts"><div><dt>Организация</dt><dd>{esc(item['name'])}</dd></div><div><dt>Адрес</dt><dd itemprop="address">{esc(item['city'])}, {esc(item['address'])}{postal}</dd></div><div><dt>Район</dt><dd>{esc(item['district'])}</dd></div>{hours}</dl></section>
+<section class="org-profile-section"><div class="container org-profile-layout"><article class="org-profile-main"><section class="org-content-card org-contact-details-card" aria-labelledby="org-details-title"><p class="eyebrow">Всё в одном месте</p><h2 id="org-details-title">Контакты и сведения об организации</h2><div class="org-contact-primary"><span class="org-contact-label">Телефон организации</span><a class="org-phone" href="tel:{esc(phone['href'])}">{esc(phone['label'])}</a></div><div class="org-website-row"><div><span class="org-contact-label">Сайт организации</span><a class="org-website-link" href="{esc(item['website'])}" target="_blank" rel="noopener noreferrer">{esc(item['website'])}</a></div><a class="org-action org-action--primary" href="{esc(item['website'])}" target="_blank" rel="noopener noreferrer">Перейти на сайт <span>↗</span></a></div><small class="org-contact-source">Перед визитом уточните актуальность данных на сайте {esc(website_host)} или по телефону.</small><dl class="org-facts"><div><dt>Организация</dt><dd>{esc(item['name'])}</dd></div><div><dt>Адрес</dt><dd itemprop="address">{esc(item['city'])}, {esc(item['address'])}{postal}</dd></div><div><dt>Район</dt><dd>{esc(item['district'])}</dd></div>{hours}</dl><section class="org-map-section" aria-labelledby="org-map-title"><div class="org-map-heading"><div><span class="org-contact-label">Точное расположение</span><h3 id="org-map-title">Организация на карте</h3></div><a href="{esc(map_link(item))}" target="_blank" rel="noopener noreferrer">Открыть большую карту <span>↗</span></a></div><iframe class="org-map-frame" src="{esc(map_embed_link(item))}" title="{esc(item['name'])} на карте" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe><p class="org-map-address"><span>Метка:</span> {esc(item['city'])}, {esc(item['address'])}</p></section></section>
 <section class="org-content-card" aria-labelledby="org-profile-title"><p class="eyebrow">Направления</p><h2 id="org-profile-title">Чем занимается организация</h2><ul class="org-category-list">{categories}</ul><ul class="org-fit-list">{fits}</ul></section>
 <section class="org-check-card" aria-labelledby="org-check-title"><div class="org-check-icon" aria-hidden="true">✓</div><div><h2 id="org-check-title">Что проверить перед обращением</h2><p>Контакты, режим работы и перечень услуг могут меняться. Уточните актуальные сведения по телефону или на официальном сайте организации. Карточка обновлена {esc(generated_label)}.</p></div></section></article>
 <aside class="org-dnepr-card" aria-label="Реклама услуг ГК ДНЕПР"><span class="org-ad-label">Реклама · ГК «ДНЕПР»</span><p class="org-dnepr-kicker">Строительно-монтажная компания</p><h2>Нужен подрядчик на объект?</h2><p>Берём на себя проектирование, строительство и монтаж промышленных и гражданских объектов.</p><ul><li>Проектирование и экспертиза</li><li>Строительно-монтажные работы</li><li>Генподряд и собственная техника</li></ul><a class="button button-primary" href="/contacts/#request">Обсудить задачу <span class="arrow">↗</span></a><a class="org-dnepr-phone" href="tel:+73496453002">+7 (3496) 45-30-02</a><a class="org-dnepr-more" href="/services/">Посмотреть услуги ДНЕПР →</a><small>Это предложение ГК «ДНЕПР», а не организации «{esc(item['name'])}».</small></aside></div></section>
@@ -476,7 +483,7 @@ def write_report(path: Path, records: list[dict], rejected: collections.Counter,
 
 - Публичный каталог, страницы районов и ссылки на организации из навигации сайта не создаются.
 - Каждая организация получает только собственный постоянный URL для переходов из поисковых систем.
-- Телефон, сайт, карта, адрес, район, режим работы и название организации собраны в одной карточке, чтобы посетитель не путался.
+- Телефон, кликабельный адрес сайта, кнопка перехода, большая карта с меткой, адрес, район, режим работы и название организации собраны в одной карточке, чтобы посетитель не путался.
 - Единая карточка сведений визуально отделена от рекламного предложения ГК «ДНЕПР».
 - Карточка содержит фактические контактные сведения, ссылку на указанный сайт и явное уведомление, что страница не является официальным сайтом организации.
 - В sitemap включаются только отдельные карточки, прошедшие фильтр.

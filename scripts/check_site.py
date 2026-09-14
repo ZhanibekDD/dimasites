@@ -195,9 +195,11 @@ for page in (ROOT / "organizations").rglob("index.html") if (ROOT / "organizatio
         errors.append(f"{page.relative_to(ROOT)}: organization details must be grouped in one contact card")
     if 'class="org-quick-card"' in content:
         errors.append(f"{page.relative_to(ROOT)}: obsolete separate quick-contact card remains")
-    for marker in ("Телефон организации", "Открыть сайт", "Показать на карте", "Организация", "Адрес", "Район"):
+    for marker in ("Телефон организации", "Сайт организации", "Перейти на сайт", "Организация на карте", "Открыть большую карту", "Организация", "Адрес", "Район"):
         if marker not in content:
             errors.append(f"{page.relative_to(ROOT)}: unified organization card is missing {marker}")
+    if content.count('class="org-map-frame"') != 1:
+        errors.append(f"{page.relative_to(ROOT)}: organization profile must contain one embedded map")
     name_match = re.search(r'<h1(?:\s+[^>]*)?>([^<]+)</h1>', content)
     if name_match and forbidden_organization_name.search(name_match.group(1)):
         errors.append(f"{page.relative_to(ROOT)}: irrelevant organization profile remains: {name_match.group(1)}")
