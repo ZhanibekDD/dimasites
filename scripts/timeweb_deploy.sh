@@ -62,6 +62,15 @@ else
     echo "GitHub is temporarily unavailable. Using the successfully cloned version for the first deployment."
 fi
 
+# Ownership verification is a harmless static file and must not be blocked by
+# transient external registry checks (FNS/EIS/EGRZ). Publish it immediately
+# after the repository update so Yandex Webmaster can always reach it.
+mkdir -p "${PUBLIC_DIRECTORY}"
+if [ -f "${DEPLOY_REPOSITORY}/verification/yandex_a48293f049e7a4da.html" ]; then
+    cp "${DEPLOY_REPOSITORY}/verification/yandex_a48293f049e7a4da.html" \
+        "${PUBLIC_DIRECTORY}/yandex_a48293f049e7a4da.html"
+fi
+
 python3 "${DEPLOY_REPOSITORY}/scripts/check_site.py"
 
 if ! command -v php >/dev/null 2>&1; then
@@ -97,7 +106,6 @@ if ! python3 "${DEPLOY_REPOSITORY}/scripts/production_smoke.py" \
     exit 1
 fi
 
-mkdir -p "${PUBLIC_DIRECTORY}"
 if [ ! -f "${MANAGED_MARKER}" ]; then
     BACKUP_ARCHIVE="${HOME}/stroydnepr-before-git-$(date +%Y%m%d-%H%M%S).tar.gz"
     tar -czf "${BACKUP_ARCHIVE}" -C "${PUBLIC_DIRECTORY}" .
